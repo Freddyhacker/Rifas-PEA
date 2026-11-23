@@ -8,10 +8,10 @@
   --text: #0f172a;
   --muted: #64748b;
   --border: #e2e8f0;
-  --radius: 12px;
+  --radius: 14px;
   --cols-desktop: 10;
   --cols-mobile: 5;
-  --header-font: 26px;
+  --header-font: 28px;
   --body-font: 15px;
 }
 
@@ -148,57 +148,108 @@ body {
   padding: 16px;
 }
 
+/* CABECERA REDISEÑADA Y ORGANIZADA */
 .raffle-header-card {
   background: var(--surface);
   border-radius: var(--radius);
-  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.06);
   margin-bottom: 16px;
   border: 1px solid var(--border);
   overflow: hidden;
 }
 
-.raffle-header-grid {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 20px;
-  align-items: center;
+.raffle-hero {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 
-.raffle-info h1 { font-size: var(--header-font); color: var(--primary); line-height: 1.2; }
-.subtitle { color: var(--muted); margin-top: 4px; }
-.promo-pill {
-  display: inline-block;
+.raffle-hero-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.raffle-title-block {
+  flex: 1 1 320px;
+}
+
+.raffle-title-block h1 {
+  font-size: var(--header-font);
+  color: var(--text);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+.subtitle {
+  color: var(--muted);
+  font-size: 15px;
+  margin-top: 4px;
+}
+
+.price-banner {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   background: var(--primary);
   color: #fff;
   font-weight: 700;
-  padding: 6px 14px;
-  border-radius: 99px;
-  margin: 12px 0;
+  padding: 8px 16px;
+  border-radius: 10px;
+  margin-top: 12px;
   font-size: 14px;
-}
-
-.raffle-meta-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 8px;
-  font-size: 13px;
-  background: #f8fafc;
-  padding: 12px;
-  border-radius: 8px;
+  box-shadow: 0 2px 6px rgba(37, 99, 235, 0.25);
 }
 
 .raffle-images {
   display: flex;
   gap: 10px;
   flex-wrap: wrap;
-  justify-content: flex-end;
 }
+
 .raffle-images img {
-  max-height: 150px;
-  max-width: 180px;
+  height: 120px;
+  width: 150px;
   object-fit: cover;
   border-radius: 10px;
   border: 1px solid var(--border);
+  box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+}
+
+.raffle-details-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 10px;
+  border-top: 1px solid var(--border);
+  padding-top: 14px;
+}
+
+.detail-box {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.detail-box-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.detail-box-value {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text);
+  white-space: pre-line;
 }
 
 .winner-banner {
@@ -208,8 +259,11 @@ body {
   font-weight: 700;
   text-align: center;
   font-size: 16px;
+  border-radius: 10px;
+  margin-top: 12px;
 }
 
+/* Toolbar & Filters */
 .toolbar-card {
   background: var(--surface);
   padding: 12px;
@@ -241,6 +295,7 @@ body {
 .pill-apar.active { background: var(--warning); border-color: var(--warning); color: #000; }
 .pill-vend.active { background: var(--accent); border-color: var(--accent); }
 
+/* Cuadrícula de Boletos */
 .tickets-grid {
   display: grid;
   grid-template-columns: repeat(var(--cols-desktop), minmax(0, 1fr));
@@ -368,7 +423,6 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--primary); b
 
 @media (max-width: 768px) {
   .tickets-grid { grid-template-columns: repeat(var(--cols-mobile), minmax(0, 1fr)); }
-  .raffle-header-grid { grid-template-columns: 1fr; }
-  .raffle-images { justify-content: flex-start; }
+  .raffle-images img { width: 110px; height: 90px; }
   .filters-row { grid-template-columns: 1fr; }
 }
