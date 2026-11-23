@@ -2,7 +2,7 @@
  * GESTOR DE RIFAS PRO - FRONTEND SPA + PWA
  */
 
-const DEFAULT_GAS_ENDPOINT = 'https://script.google.com/macros/s/REEMPLAZA_CON_TU_ID/exec';
+const DEFAULT_GAS_ENDPOINT = 'https://script.google.com/macros/s/AKfycbxpwjnw4awqaZMvugTWmSOK7bZLFE5reckrWO2Vm0UQUGLZWlXBY2Xcdp_0y1g8HbnNmA/exec';
 
 const state = {
   endpoint: localStorage.getItem('rifas_gas_url') || DEFAULT_GAS_ENDPOINT,
