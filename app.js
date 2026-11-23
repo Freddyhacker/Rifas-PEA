@@ -1,5 +1,5 @@
 /**
- * GESTOR DE RIFAS PRO - FRONTEND SPA + PWA (v3.6)
+ * GESTOR DE RIFAS PRO - FRONTEND SPA + PWA (v3.7)
  */
 
 const DEFAULT_GAS_ENDPOINT = 'https://script.google.com/macros/s/AKfycbwOtmUVlM3mcEiPa2BmNP3Q9yDqwUVN_-GsvqWnMmQmVZyhkkVfLygVuL_-HrYM-FnhpA/exec';
@@ -51,6 +51,63 @@ document.addEventListener('DOMContentLoaded', () => {
     showLoginView();
   }
 });
+
+function getTicketMultiplier(cfg = state.config) {
+  if (!cfg) return 1;
+  const n = Number(cfg.numbersPerTicket);
+  if (!Number.isNaN(n) && n >= 1) return Math.floor(n);
+  return cfg.doubleChance ? 2 : 1;
+}
+
+function buildExtraMap(totalTickets, multiplier) {
+  const n = Number(totalTickets) || 0;
+  const mult = Math.max(1, Math.floor(Number(multiplier) || 1));
+  const extraCount = mult - 1;
+  if (n <= 0 || extraCount <= 0) return {};
+
+  const pool = [];
+  for (let i = n + 1; i <= n + n * extraCount; i++) {
+    pool.push(i);
+  }
+
+  for (let i = pool.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [pool[i], pool[j]] = [pool[j], pool[i]];
+  }
+
+  const map = {};
+  let cursor = 0;
+  for (let k = 1; k <= n; k++) {
+    const chunk = [];
+    for (let c = 0; c < extraCount; c++) {
+      chunk.push(pool[cursor++]);
+    }
+    chunk.sort((a, b) => a - b);
+    map[String(k)] = chunk;
+  }
+  return map;
+}
+
+function isExtraMapValid(map, totalTickets, multiplier) {
+  const n = Number(totalTickets) || 0;
+  const extraCount = Math.max(0, Math.floor(Number(multiplier) || 1) - 1);
+  if (extraCount === 0) return true;
+  if (!map || typeof map !== 'object') return false;
+
+  const seen = new Set();
+  for (let k = 1; k <= n; k++) {
+    const arr = map[String(k)];
+    if (!Array.isArray(arr) || arr.length !== extraCount) return false;
+    for (let i = 0; i < arr.length; i++) {
+      const val = Number(arr[i]);
+      if (!val || val <= n || val > n + n * extraCount || seen.has(val)) {
+        return false;
+      }
+      seen.add(val);
+    }
+  }
+  return seen.size === n * extraCount;
+}
 
 function saveLocalSnapshot(payload) {
   try {
@@ -230,19 +287,6 @@ function stopAutoSync() {
   }
 }
 
-function buildFallbackDoubleMap(totalTickets) {
-  const n = Number(totalTickets) || 0;
-  const arr = [];
-  for (let i = n + 1; i <= n * 2; i++) arr.push(i);
-  for (let i = arr.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [arr[i], arr[j]] = [arr[j], arr[i]];
-  }
-  const map = {};
-  for (let k = 1; k <= n; k++) map[String(k)] = arr[k - 1];
-  return map;
-}
-
 async function syncData(forceFull = false) {
   const indicator = document.getElementById('syncIndicator');
   indicator.textContent = '↻ Sincronizando...';
@@ -258,22 +302,28 @@ async function syncData(forceFull = false) {
       state.config = res.config || {};
       state.user = res.user;
 
-      const isDouble = Boolean(state.config.doubleChance);
+      const mult = getTicketMultiplier(state.config);
       const total = Number(state.config.totalTickets || (res.tickets || []).length);
-      let dMap = state.config.doubleMap;
-      if (isDouble && (!dMap || Object.keys(dMap).length < total)) {
-        dMap = buildFallbackDoubleMap(total);
-        state.config.doubleMap = dMap;
+      let eMap = state.config.extraMap;
+      if (mult > 1 && !isExtraMapValid(eMap, total, mult)) {
+        eMap = buildExtraMap(total, mult);
+        state.config.extraMap = eMap;
       }
 
       state.tickets = (res.tickets || [])
         .slice()
         .sort((a, b) => Number(a.numero) - Number(b.numero))
         .map(t => {
-          const sec = isDouble
-            ? (t.segundoNumero || (dMap ? dMap[String(t.numero)] : null))
-            : null;
-          return { ...t, segundoNumero: sec };
+          const extras = mult > 1
+            ? (Array.isArray(t.extraNumbers) && t.extraNumbers.length === mult - 1
+              ? t.extraNumbers
+              : (eMap && Array.isArray(eMap[String(t.numero)]) ? eMap[String(t.numero)] : []))
+            : [];
+          return {
+            ...t,
+            extraNumbers: extras,
+            segundoNumero: extras.length ? extras[0] : null
+          };
         });
 
       if (res.users) state.users = res.users;
@@ -351,6 +401,7 @@ function renderAll(forceFormRefresh = false) {
 
 function renderRaffleHeader() {
   const cfg = state.config || {};
+  const mult = getTicketMultiplier(cfg);
   document.getElementById('displayTitle').textContent = cfg.title || 'GRAN RIFA ESPECIAL';
   document.getElementById('displaySubtitle').textContent = cfg.subtitle || '¡Participa y gana increíbles premios!';
 
@@ -360,9 +411,9 @@ function renderRaffleHeader() {
     const parts = cfg.promoText.split('|').map(s => s.trim()).filter(Boolean);
     if (parts[0]) promoDoubleEl.textContent = parts[0];
     if (parts[1]) promoTicketsEl.textContent = parts[1];
-  } else if (cfg.promoText) {
-    promoDoubleEl.textContent = cfg.promoText;
-    promoTicketsEl.textContent = '2 números por boleto.';
+  } else {
+    promoDoubleEl.textContent = cfg.promoText || `Cada boleto vale x${mult}.`;
+    promoTicketsEl.textContent = mult > 1 ? `${mult} números por boleto.` : '1 número por boleto.';
   }
 
   const firstEl = document.getElementById('displayFirstPrize');
@@ -406,7 +457,7 @@ function renderRaffleHeader() {
 function renderTicketsGrid() {
   const grid = document.getElementById('ticketsGrid');
   const q = state.searchQuery.toLowerCase();
-  const isDouble = Boolean(state.config && state.config.doubleChance);
+  const mult = getTicketMultiplier(state.config);
 
   let disp = 0, apar = 0, vend = 0;
   state.tickets.forEach(t => {
@@ -424,10 +475,10 @@ function renderTicketsGrid() {
     if (state.currentFilter !== 'all' && t.estado !== state.currentFilter) return false;
     if (q) {
       const matchNum = String(t.numero).includes(q);
-      const matchSec = t.segundoNumero && String(t.segundoNumero).includes(q);
+      const matchExtra = Array.isArray(t.extraNumbers) && t.extraNumbers.some(n => String(n).includes(q));
       const matchName = (t.participante || '').toLowerCase().includes(q);
       const matchPhone = (t.telefono || '').toLowerCase().includes(q);
-      return matchNum || matchSec || matchName || matchPhone;
+      return matchNum || matchExtra || matchName || matchPhone;
     }
     return true;
   });
@@ -442,14 +493,15 @@ function renderTicketsGrid() {
       ? (ticket.vendedorAsignado ? `Asig: ${ticket.vendedorAsignado}` : 'Libre')
       : ticket.participante;
 
-    const doubleHtml = (isDouble && ticket.segundoNumero)
-      ? `<span class="ticket-double-pill">#${ticket.segundoNumero}</span>`
+    const extrasList = (mult > 1 && Array.isArray(ticket.extraNumbers)) ? ticket.extraNumbers : [];
+    const extrasHtml = extrasList.length
+      ? extrasList.map(n => `<span class="ticket-double-pill">#${n}</span>`).join('')
       : '';
 
     cell.innerHTML = `
       <div class="ticket-pair-row">
         <span class="ticket-num">#${ticket.numero}</span>
-        ${doubleHtml}
+        ${extrasHtml}
       </div>
       <span class="ticket-sub">${escapeHtml(label)}</span>
     `;
@@ -461,12 +513,14 @@ function renderTicketsGrid() {
 }
 
 function openTicketModal(ticket) {
+  const mult = getTicketMultiplier(state.config);
   document.getElementById('modalTicketNumber').textContent = ticket.numero;
   document.getElementById('modalTicketNumInput').value = ticket.numero;
 
+  const extrasList = (mult > 1 && Array.isArray(ticket.extraNumbers)) ? ticket.extraNumbers : [];
   const doubleModalBadge = document.getElementById('modalDoubleBadge');
-  if (state.config && state.config.doubleChance && ticket.segundoNumero) {
-    doubleModalBadge.textContent = `2° Número: #${ticket.segundoNumero}`;
+  if (extrasList.length > 0) {
+    doubleModalBadge.textContent = `Extras: ${extrasList.map(n => `#${n}`).join(', ')}`;
     doubleModalBadge.classList.remove('hidden');
   } else {
     doubleModalBadge.classList.add('hidden');
@@ -479,8 +533,9 @@ function openTicketModal(ticket) {
 
   const metaBox = document.getElementById('modalTicketMeta');
   let metaLines = [];
-  if (state.config && state.config.doubleChance && ticket.segundoNumero) {
-    metaLines.push(`Participa con los números <strong>#${ticket.numero}</strong> y <strong>#${ticket.segundoNumero}</strong>`);
+  if (extrasList.length > 0) {
+    const allNums = [`#${ticket.numero}`, ...extrasList.map(n => `#${n}`)].join(', ');
+    metaLines.push(`Participa con los números: <strong>${allNums}</strong>`);
   }
   if (ticket.vendedorAsignado) metaLines.push(`Asignado a: <strong>${escapeHtml(ticket.vendedorAsignado)}</strong>`);
   if (ticket.vendedorRegistro) metaLines.push(`Registrado por: <strong>${escapeHtml(ticket.vendedorRegistro)}</strong>`);
@@ -540,7 +595,7 @@ async function handleReleaseTicketClick() {
 function renderAdminTable() {
   const tbody = document.getElementById('adminTicketsTableBody');
   const vendorSelect = document.getElementById('adminFilterVendor');
-  const isDouble = Boolean(state.config && state.config.doubleChance);
+  const mult = getTicketMultiplier(state.config);
 
   const thDouble = document.getElementById('thDoubleCol');
   if (thDouble) thDouble.classList.add('hidden');
@@ -572,7 +627,7 @@ function renderAdminTable() {
     }
     if (q) {
       return String(t.numero).includes(q) ||
-        (t.segundoNumero && String(t.segundoNumero).includes(q)) ||
+        (Array.isArray(t.extraNumbers) && t.extraNumbers.some(n => String(n).includes(q))) ||
         (t.participante || '').toLowerCase().includes(q) ||
         (t.telefono || '').toLowerCase().includes(q);
     }
@@ -591,8 +646,9 @@ function renderAdminTable() {
       if (diffH <= 3) expText = `<span class="tag tag-warn">Pronto: ${expText}</span>`;
     }
 
-    const numDisplay = (isDouble && t.segundoNumero)
-      ? `<div class="ticket-table-pair"><strong>#${t.numero}</strong><span class="tag tag-double">#${t.segundoNumero}</span></div>`
+    const extrasList = (mult > 1 && Array.isArray(t.extraNumbers)) ? t.extraNumbers : [];
+    const numDisplay = extrasList.length
+      ? `<div class="ticket-table-pair"><strong>#${t.numero}</strong>${extrasList.map(n => `<span class="tag tag-double">#${n}</span>`).join('')}</div>`
       : `<strong>#${t.numero}</strong>`;
 
     return `
@@ -622,13 +678,13 @@ function exportToExcel() {
     return;
   }
 
-  const isDouble = Boolean(state.config && state.config.doubleChance);
+  const mult = getTicketMultiplier(state.config);
   const dataRows = state.tickets.map(t => {
     const row = {
       'Número Principal': t.numero
     };
-    if (isDouble) {
-      row['Segundo Número (Doble)'] = t.segundoNumero || '';
+    if (mult > 1) {
+      row['Números Extra'] = Array.isArray(t.extraNumbers) ? t.extraNumbers.join(', ') : '';
     }
     row['Estado Venta'] = t.estado.toUpperCase();
     row['Estado Pago'] = t.estado === 'disponible' ? '' : t.estadoPago.toUpperCase();
@@ -651,6 +707,7 @@ function exportToExcel() {
 function renderStats() {
   const total = state.tickets.length;
   const price = Number(state.config.ticketPrice || 0);
+  const mult = getTicketMultiplier(state.config);
   const disp = state.tickets.filter(t => t.estado === 'disponible').length;
   const apar = state.tickets.filter(t => t.estado === 'apartado').length;
   const vend = state.tickets.filter(t => t.estado === 'vendido').length;
@@ -662,7 +719,7 @@ function renderStats() {
   const pctOcupados = total > 0 ? Math.round(((vend + apar) / total) * 100) : 0;
 
   document.getElementById('kpiGrid').innerHTML = `
-    <div class="kpi-card"><span>Total de Boletos</span><strong>${total}${state.config.doubleChance ? ` (${total * 2} núms)` : ''}</strong></div>
+    <div class="kpi-card"><span>Total de Boletos</span><strong>${total}${mult > 1 ? ` (${total * mult} núms)` : ''}</strong></div>
     <div class="kpi-card"><span>Disponibles</span><strong>${disp} <small style="font-size:13px;color:var(--muted)">(${total > 0 ? Math.round((disp/total)*100) : 0}%)</small></strong></div>
     <div class="kpi-card"><span>Apartados (Pendientes)</span><strong>${apar} <small style="font-size:13px;color:var(--muted)">(${total > 0 ? Math.round((apar/total)*100) : 0}%)</small></strong></div>
     <div class="kpi-card"><span>Vendidos (Pagados)</span><strong>${vend} <small style="font-size:13px;color:var(--muted)">(${pctVendidos}%)</small></strong></div>
@@ -717,39 +774,8 @@ function renderStats() {
   }).join('');
 }
 
-function updateManualVendorWarning() {
-  const sel = document.getElementById('manualAssignVendor');
-  const warn = document.getElementById('manualVendorWarning');
-  const btn = document.getElementById('btnManualAssign');
-  const u = state.users.find(item => item.id === sel.value);
-
-  if (u && u.assignedTickets && u.assignedTickets.length > 0) {
-    warn.textContent = `Este vendedor ya tiene ${u.assignedTickets.length} boletos asignados. Solo se permite asignar una vez.`;
-    btn.disabled = true;
-  } else {
-    warn.textContent = '';
-    btn.disabled = false;
-  }
-}
-
 function renderUsersAndAssignments() {
   document.getElementById('cfgDistModeQuick').value = state.config.distributionMode || 'A';
-
-  const manualSel = document.getElementById('manualAssignVendor');
-  const currentManual = manualSel.value;
-  manualSel.innerHTML = '';
-  state.users.filter(u => u.role === 'vendedor').forEach(u => {
-    const opt = document.createElement('option');
-    opt.value = u.id;
-    const lockedTag = u.assignedTickets.length > 0 ? ' [Ya asignado]' : '';
-    const statusTag = !u.active ? ' (Cerrado)' : '';
-    opt.textContent = `${u.username}${statusTag} (${u.assignedTickets.length} asignados)${lockedTag}`;
-    manualSel.appendChild(opt);
-  });
-  if (currentManual && Array.from(manualSel.options).some(o => o.value === currentManual)) {
-    manualSel.value = currentManual;
-  }
-  updateManualVendorWarning();
 
   document.getElementById('usersTableBody').innerHTML = state.users.map(u => {
     const isSelf = state.user && state.user.id === u.id;
@@ -830,30 +856,30 @@ function resetUserForm() {
   document.getElementById('btnCancelEditUser').classList.add('hidden');
 }
 
-function parseNumberRanges(str) {
-  const nums = [];
-  str.split(',').forEach(part => {
-    const clean = part.trim();
-    if (clean.includes('-')) {
-      const [start, end] = clean.split('-').map(Number);
-      if (start && end && start <= end) {
-        for (let i = start; i <= end; i++) nums.push(i);
-      }
-    } else if (Number(clean)) {
-      nums.push(Number(clean));
-    }
-  });
-  return nums;
+function updateExtraHint(val) {
+  const n = Math.max(1, Math.floor(Number(val) || 1));
+  const extra = n - 1;
+  const hint = document.getElementById('extraTicketsHint');
+  const btn = document.getElementById('btnRegenerateExtra');
+  if (hint) {
+    hint.textContent = extra === 0
+      ? 'Cada boleto tiene 1 número (sin números extra).'
+      : `Cada boleto vale x${n}: agrega ${extra} número(s) extra aleatorio(s) sin repetir.`;
+  }
+  if (btn) {
+    btn.classList.toggle('hidden', extra === 0);
+  }
 }
 
 function populateConfigForm() {
   const c = state.config;
+  const mult = getTicketMultiplier(c);
   document.getElementById('cfgTitle').value = c.title || '';
   document.getElementById('cfgSubtitle').value = c.subtitle || '';
   document.getElementById('cfgTotalTickets').value = c.totalTickets ?? 100;
   document.getElementById('cfgTicketPrice').value = c.ticketPrice ?? 50;
-  document.getElementById('cfgDoubleChance').checked = Boolean(c.doubleChance);
-  document.getElementById('btnRegenerateDouble').classList.toggle('hidden', !c.doubleChance);
+  document.getElementById('cfgNumbersPerTicket').value = mult;
+  updateExtraHint(mult);
   document.getElementById('cfgPromoText').value = c.promoText || '';
   document.getElementById('cfgPrizesText').value = c.prizesText || '';
   document.getElementById('cfgReasonText').value = c.reasonText || '';
@@ -918,7 +944,6 @@ function handlePrizeImageUpload(e) {
   });
 }
 
-// Guardado limpio por campo: conserva el valor previo de state.config si un campo está vacío o no se modificó
 function readFieldClean(id, fallbackValue, isNumber = false) {
   const el = document.getElementById(id);
   if (!el) return fallbackValue;
@@ -931,7 +956,7 @@ function readFieldClean(id, fallbackValue, isNumber = false) {
   return raw === '' ? (fallbackValue ?? '') : raw;
 }
 
-async function handleSaveConfigSubmit(e, regenerateDoubleMap = false) {
+async function handleSaveConfigSubmit(e, regenerateExtraMap = false) {
   if (e) e.preventDefault();
   const btn = document.getElementById('btnSaveConfig');
   btn.disabled = true;
@@ -939,15 +964,15 @@ async function handleSaveConfigSubmit(e, regenerateDoubleMap = false) {
 
   try {
     const cur = state.config || {};
+    const prevMult = getTicketMultiplier(cur);
     const totalVal = readFieldClean('cfgTotalTickets', Number(cur.totalTickets) || 100, true);
     const priceVal = readFieldClean('cfgTicketPrice', Number(cur.ticketPrice) || 50, true);
-    const doubleEl = document.getElementById('cfgDoubleChance');
-    const doubleVal = doubleEl ? Boolean(doubleEl.checked) : Boolean(cur.doubleChance);
+    const multVal = Math.max(1, Math.floor(readFieldClean('cfgNumbersPerTicket', prevMult, true)));
 
-    const localMap = doubleVal
-      ? ((regenerateDoubleMap || !cur.doubleMap || Object.keys(cur.doubleMap).length !== totalVal)
-        ? buildFallbackDoubleMap(totalVal)
-        : cur.doubleMap)
+    const localMap = multVal > 1
+      ? ((regenerateExtraMap || Number(cur.totalTickets) !== totalVal || prevMult !== multVal || !isExtraMapValid(cur.extraMap, totalVal, multVal))
+        ? buildExtraMap(totalVal, multVal)
+        : cur.extraMap)
       : {};
 
     const payload = {
@@ -955,9 +980,10 @@ async function handleSaveConfigSubmit(e, regenerateDoubleMap = false) {
       subtitle: readFieldClean('cfgSubtitle', cur.subtitle || '¡Participa y gana increíbles premios!', false),
       totalTickets: totalVal,
       ticketPrice: priceVal,
-      doubleChance: doubleVal,
-      doubleMap: localMap,
-      regenerateDoubleMap: regenerateDoubleMap,
+      numbersPerTicket: multVal,
+      doubleChance: multVal > 1,
+      extraMap: localMap,
+      regenerateExtraMap: regenerateExtraMap,
       promoText: readFieldClean('cfgPromoText', cur.promoText || '', false),
       prizesText: readFieldClean('cfgPrizesText', cur.prizesText || '', false),
       reasonText: readFieldClean('cfgReasonText', cur.reasonText || '', false),
@@ -1045,18 +1071,16 @@ function bindEvents() {
     syncData(true);
   });
 
-  document.getElementById('manualAssignVendor').addEventListener('change', updateManualVendorWarning);
-
   const cfgForm = document.getElementById('configForm');
   cfgForm.addEventListener('input', () => { state.configDirty = true; });
   cfgForm.addEventListener('change', () => { state.configDirty = true; });
 
-  document.getElementById('cfgDoubleChance').addEventListener('change', (e) => {
-    document.getElementById('btnRegenerateDouble').classList.toggle('hidden', !e.target.checked);
+  document.getElementById('cfgNumbersPerTicket').addEventListener('input', (e) => {
+    updateExtraHint(e.target.value);
   });
 
-  document.getElementById('btnRegenerateDouble').addEventListener('click', async () => {
-    if (!confirm('¿Generar nuevos segundos números aleatorios para todos los boletos?')) return;
+  document.getElementById('btnRegenerateExtra').addEventListener('click', async () => {
+    if (!confirm('¿Generar nuevos números extra aleatorios sin repetir para todos los boletos?')) return;
     await handleSaveConfigSubmit(null, true);
   });
 
@@ -1116,7 +1140,6 @@ function bindEvents() {
     try {
       const res = await apiCall('assignTickets', {
         mode: 'auto',
-        perVendor: Number(document.getElementById('autoAssignCount').value),
         shuffle: document.getElementById('autoAssignShuffle').value === 'true'
       });
       showToast(res.message, 'success');
@@ -1128,20 +1151,6 @@ function bindEvents() {
     if (!confirm('¿Quitar todas las asignaciones de vendedores?')) return;
     try {
       const res = await apiCall('assignTickets', { mode: 'clear' });
-      showToast(res.message, 'success');
-      await syncData(true);
-    } catch (err) { showToast(err.message, 'error'); }
-  });
-
-  document.getElementById('btnManualAssign').addEventListener('click', async () => {
-    try {
-      const numbers = parseNumberRanges(document.getElementById('manualAssignInput').value);
-      const res = await apiCall('assignTickets', {
-        mode: 'manual',
-        userId: document.getElementById('manualAssignVendor').value,
-        numbers
-      });
-      document.getElementById('manualAssignInput').value = '';
       showToast(res.message, 'success');
       await syncData(true);
     } catch (err) { showToast(err.message, 'error'); }
