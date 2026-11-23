@@ -1,8 +1,8 @@
 /**
- * GESTOR DE RIFAS PRO - FRONTEND SPA + PWA (v3)
+ * GESTOR DE RIFAS PRO - FRONTEND SPA + PWA (v3.1)
  */
 
-const DEFAULT_GAS_ENDPOINT = 'https://script.google.com/macros/s/AKfycbyzny4C1WxdYv_9jY0hqKZ3yyn75DlbUyoCFohNUINeaEQdZ4Sj6zqAXCpNAguU2TPwLw/exec';
+const DEFAULT_GAS_ENDPOINT = 'https://script.google.com/macros/s/REEMPLAZA_CON_TU_ID/exec';
 
 const state = {
   endpoint: (localStorage.getItem('rifas_gas_url') || DEFAULT_GAS_ENDPOINT).trim(),
@@ -23,7 +23,6 @@ const state = {
 };
 
 document.addEventListener('DOMContentLoaded', () => {
-  // Si localStorage tenía guardada una URL de ejemplo inválida, limpiarla
   if (state.endpoint.includes('REEMPLAZA_CON_TU_ID') && !DEFAULT_GAS_ENDPOINT.includes('REEMPLAZA_CON_TU_ID')) {
     state.endpoint = DEFAULT_GAS_ENDPOINT;
     localStorage.setItem('rifas_gas_url', DEFAULT_GAS_ENDPOINT);
@@ -84,7 +83,6 @@ async function apiCall(action, data = {}) {
 
   let response;
   try {
-    // credentials: 'omit' evita bloqueos de cookies en Safari/Chrome móvil al redirigir GAS
     response = await fetch(cleanUrl, {
       method: 'POST',
       mode: 'cors',
@@ -94,7 +92,6 @@ async function apiCall(action, data = {}) {
       body: payloadStr
     });
   } catch (postErr) {
-    // Fallback automático por GET si la red móvil interrumpe redirecciones POST
     const sep = cleanUrl.includes('?') ? '&' : '?';
     const getUrl = `${cleanUrl}${sep}payload=${encodeURIComponent(payloadStr)}`;
     try {
@@ -187,6 +184,19 @@ function stopAutoSync() {
   }
 }
 
+function buildFallbackDoubleMap(totalTickets) {
+  const n = Number(totalTickets) || 0;
+  const arr = [];
+  for (let i = n + 1; i <= n * 2; i++) arr.push(i);
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  const map = {};
+  for (let k = 1; k <= n; k++) map[String(k)] = arr[k - 1];
+  return map;
+}
+
 async function syncData(forceFull = false) {
   const indicator = document.getElementById('syncIndicator');
   indicator.textContent = '↻ Sincronizando...';
@@ -199,15 +209,27 @@ async function syncData(forceFull = false) {
 
     if (!res.upToDate) {
       state.version = res.version;
-      state.config = res.config;
+      state.config = res.config || {};
       state.user = res.user;
-      state.tickets = (res.tickets || []).map(t => {
-        // Asegurar segundoNumero desde config.doubleMap si está activo
-        const sec = (res.config.doubleChance && res.config.doubleMap)
-          ? (t.segundoNumero || res.config.doubleMap[String(t.numero)] || null)
-          : null;
-        return { ...t, segundoNumero: sec };
-      });
+
+      const isDouble = Boolean(state.config.doubleChance);
+      const total = Number(state.config.totalTickets || (res.tickets || []).length);
+      let dMap = state.config.doubleMap;
+      if (isDouble && (!dMap || Object.keys(dMap).length < total)) {
+        dMap = buildFallbackDoubleMap(total);
+        state.config.doubleMap = dMap;
+      }
+
+      state.tickets = (res.tickets || [])
+        .slice()
+        .sort((a, b) => Number(a.numero) - Number(b.numero))
+        .map(t => {
+          const sec = isDouble
+            ? (t.segundoNumero || (dMap ? dMap[String(t.numero)] : null))
+            : null;
+          return { ...t, segundoNumero: sec };
+        });
+
       if (res.users) state.users = res.users;
       if (res.history) state.history = res.history;
       if (res.backups) state.backups = res.backups;
@@ -353,12 +375,14 @@ function renderTicketsGrid() {
       : ticket.participante;
 
     const doubleHtml = (isDouble && ticket.segundoNumero)
-      ? `<span class="ticket-double-pill">+ #${ticket.segundoNumero}</span>`
+      ? `<span class="ticket-double-pill">#${ticket.segundoNumero}</span>`
       : '';
 
     cell.innerHTML = `
-      <span class="ticket-num">${ticket.numero}</span>
-      ${doubleHtml}
+      <div class="ticket-pair-row">
+        <span class="ticket-num">#${ticket.numero}</span>
+        ${doubleHtml}
+      </div>
       <span class="ticket-sub">${escapeHtml(label)}</span>
     `;
     cell.addEventListener('click', () => openTicketModal(ticket));
@@ -450,7 +474,8 @@ function renderAdminTable() {
   const vendorSelect = document.getElementById('adminFilterVendor');
   const isDouble = Boolean(state.config && state.config.doubleChance);
 
-  document.getElementById('thDoubleCol').classList.toggle('hidden', !isDouble);
+  const thDouble = document.getElementById('thDoubleCol');
+  if (thDouble) thDouble.classList.add('hidden');
 
   const currentVendorFilter = vendorSelect.value;
   vendorSelect.innerHTML = '<option value="">Todos los vendedores</option>';
@@ -498,14 +523,13 @@ function renderAdminTable() {
       if (diffH <= 3) expText = `<span class="tag tag-warn">Pronto: ${expText}</span>`;
     }
 
-    const doubleCell = isDouble
-      ? `<td><span class="tag tag-double">#${t.segundoNumero || '-'}</span></td>`
-      : '';
+    const numDisplay = (isDouble && t.segundoNumero)
+      ? `<div class="ticket-table-pair"><strong>#${t.numero}</strong><span class="tag tag-double">#${t.segundoNumero}</span></div>`
+      : `<strong>#${t.numero}</strong>`;
 
     return `
       <tr>
-        <td><strong>#${t.numero}</strong></td>
-        ${doubleCell}
+        <td>${numDisplay}</td>
         <td>${escapeHtml(t.vendedorAsignado || '-')}</td>
         <td>${escapeHtml(t.vendedorRegistro || '-')}</td>
         <td>${escapeHtml(t.participante || '-')}</td>
@@ -768,12 +792,21 @@ async function handleSaveConfigSubmit(e, regenerateDoubleMap = false) {
   btn.textContent = 'Guardando configuración...';
 
   try {
+    const totalVal = Number(document.getElementById('cfgTotalTickets').value);
+    const doubleVal = document.getElementById('cfgDoubleChance').checked;
+    const localMap = doubleVal
+      ? ((regenerateDoubleMap || !state.config.doubleMap || Object.keys(state.config.doubleMap).length !== totalVal)
+        ? buildFallbackDoubleMap(totalVal)
+        : state.config.doubleMap)
+      : {};
+
     const res = await apiCall('updateConfig', {
       title: document.getElementById('cfgTitle').value,
       subtitle: document.getElementById('cfgSubtitle').value,
-      totalTickets: Number(document.getElementById('cfgTotalTickets').value),
+      totalTickets: totalVal,
       ticketPrice: Number(document.getElementById('cfgTicketPrice').value),
-      doubleChance: document.getElementById('cfgDoubleChance').checked,
+      doubleChance: doubleVal,
+      doubleMap: localMap,
       regenerateDoubleMap: regenerateDoubleMap,
       promoText: document.getElementById('cfgPromoText').value,
       prizesText: document.getElementById('cfgPrizesText').value,
