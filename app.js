@@ -1,8 +1,9 @@
 /**
- * GESTOR DE RIFAS PRO - FRONTEND SPA + PWA (v3.2)
+ * GESTOR DE RIFAS PRO - FRONTEND SPA + PWA (v3.3)
  */
 
 const DEFAULT_GAS_ENDPOINT = 'https://script.google.com/macros/s/AKfycbyzny4C1WxdYv_9jY0hqKZ3yyn75DlbUyoCFohNUINeaEQdZ4Sj6zqAXCpNAguU2TPwLw/exec';
+const SNAPSHOT_KEY = 'rifas_last_snapshot_v1';
 
 const state = {
   endpoint: (localStorage.getItem('rifas_gas_url') || DEFAULT_GAS_ENDPOINT).trim(),
@@ -33,12 +34,52 @@ document.addEventListener('DOMContentLoaded', () => {
   updateOnlineStatus();
 
   if (state.token) {
+    // Abrir de inmediato con la última copia guardada localmente para no esperar 5-10s
+    const loadedCache = loadLocalSnapshot();
     showAppShell();
-    syncData(true);
+    if (loadedCache) {
+      applyVisualTheme();
+      renderAll(true);
+    }
+    // Sincronizar cambios recientes en segundo plano
+    syncData(false);
   } else {
     showLoginView();
   }
 });
+
+function saveLocalSnapshot(payload) {
+  try {
+    localStorage.setItem(SNAPSHOT_KEY, JSON.stringify({
+      version: payload.version,
+      config: payload.config,
+      user: payload.user,
+      tickets: payload.tickets,
+      users: payload.users || state.users,
+      history: payload.history || state.history,
+      backups: payload.backups || state.backups
+    }));
+  } catch (_) {}
+}
+
+function loadLocalSnapshot() {
+  try {
+    const raw = localStorage.getItem(SNAPSHOT_KEY);
+    if (!raw) return false;
+    const snap = JSON.parse(raw);
+    if (!snap || !snap.config || !snap.user) return false;
+    state.version = Number(snap.version || 0);
+    state.config = snap.config;
+    state.user = snap.user;
+    state.tickets = Array.isArray(snap.tickets) ? snap.tickets : [];
+    state.users = Array.isArray(snap.users) ? snap.users : [];
+    state.history = Array.isArray(snap.history) ? snap.history : [];
+    state.backups = Array.isArray(snap.backups) ? snap.backups : [];
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
 
 function registerServiceWorker() {
   if ('serviceWorker' in navigator) {
@@ -165,6 +206,7 @@ function forceLogout() {
   state.user = null;
   state.version = 0;
   localStorage.removeItem('rifas_session_token');
+  localStorage.removeItem(SNAPSHOT_KEY);
   showLoginView();
 }
 
@@ -234,6 +276,7 @@ async function syncData(forceFull = false) {
       if (res.history) state.history = res.history;
       if (res.backups) state.backups = res.backups;
 
+      saveLocalSnapshot(res);
       applyVisualTheme();
       renderAll(forceFull);
     }
@@ -242,7 +285,7 @@ async function syncData(forceFull = false) {
     indicator.classList.remove('syncing');
   } catch (err) {
     indicator.textContent = '⚠ Error red';
-    if (forceFull) showToast(err.message, 'error');
+    if (forceFull && !state.tickets.length) showToast(err.message, 'error');
   }
 }
 
@@ -633,6 +676,21 @@ function renderStats() {
   }).join('');
 }
 
+function updateManualVendorWarning() {
+  const sel = document.getElementById('manualAssignVendor');
+  const warn = document.getElementById('manualVendorWarning');
+  const btn = document.getElementById('btnManualAssign');
+  const u = state.users.find(item => item.id === sel.value);
+
+  if (u && u.assignedTickets && u.assignedTickets.length > 0) {
+    warn.textContent = `Este vendedor ya tiene ${u.assignedTickets.length} boletos asignados. Solo se permite asignar una vez.`;
+    btn.disabled = true;
+  } else {
+    warn.textContent = '';
+    btn.disabled = false;
+  }
+}
+
 function renderUsersAndAssignments() {
   document.getElementById('cfgDistModeQuick').value = state.config.distributionMode || 'A';
 
@@ -642,21 +700,50 @@ function renderUsersAndAssignments() {
   state.users.filter(u => u.role === 'vendedor').forEach(u => {
     const opt = document.createElement('option');
     opt.value = u.id;
-    opt.textContent = `${u.username} (${u.assignedTickets.length} asignados)`;
+    const lockedTag = u.assignedTickets.length > 0 ? ' [Ya asignado]' : '';
+    opt.textContent = `${u.username} (${u.assignedTickets.length} asignados)${lockedTag}`;
     manualSel.appendChild(opt);
   });
-  if (currentManual) manualSel.value = currentManual;
+  if (currentManual && Array.from(manualSel.options).some(o => o.value === currentManual)) {
+    manualSel.value = currentManual;
+  }
+  updateManualVendorWarning();
 
-  document.getElementById('usersTableBody').innerHTML = state.users.map(u => `
-    <tr>
-      <td><strong>${escapeHtml(u.username)}</strong></td>
-      <td>${u.role.toUpperCase()}</td>
-      <td>${u.active ? '<span class="tag tag-vend">Activo</span>' : '<span class="tag tag-warn">Desactivado</span>'}</td>
-      <td>${u.assignedTickets.length > 0 ? u.assignedTickets.join(', ') : 'Ninguno'}</td>
-      <td><button class="btn btn-sm btn-ghost" onclick="editUser('${u.id}')">Editar</button></td>
-    </tr>
-  `).join('');
+  document.getElementById('usersTableBody').innerHTML = state.users.map(u => {
+    const isSelf = state.user && state.user.id === u.id;
+    const delBtn = isSelf
+      ? ''
+      : `<button class="btn btn-sm btn-danger-outline" onclick="deleteUserById('${u.id}', '${escapeHtml(u.username)}')">Eliminar</button>`;
+
+    return `
+      <tr>
+        <td><strong>${escapeHtml(u.username)}</strong></td>
+        <td>${u.role.toUpperCase()}</td>
+        <td>${u.active ? '<span class="tag tag-vend">Activo</span>' : '<span class="tag tag-warn">Desactivado</span>'}</td>
+        <td>${u.assignedTickets.length > 0 ? u.assignedTickets.join(', ') : 'Ninguno'}</td>
+        <td>
+          <div class="btn-row">
+            <button class="btn btn-sm btn-ghost" onclick="editUser('${u.id}')">Editar</button>
+            ${delBtn}
+          </div>
+        </td>
+      </tr>
+    `;
+  }).join('');
 }
+
+window.deleteUserById = async function(userId, username) {
+  if (!confirm(`¿Eliminar al usuario "${username}"? Esta acción es para limpieza o pruebas.`)) {
+    return;
+  }
+  try {
+    const res = await apiCall('deleteUser', { userId });
+    showToast(res.message, 'success');
+    await syncData(true);
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
+};
 
 window.editUser = function(userId) {
   const u = state.users.find(item => item.id === userId);
@@ -884,6 +971,8 @@ function bindEvents() {
     state.configDirty = false;
     syncData(true);
   });
+
+  document.getElementById('manualAssignVendor').addEventListener('change', updateManualVendorWarning);
 
   const cfgForm = document.getElementById('configForm');
   cfgForm.addEventListener('input', () => { state.configDirty = true; });
