@@ -79,7 +79,10 @@
               <div class="raffle-title-block">
                 <h1 id="displayTitle">Cargando rifa...</h1>
                 <p id="displaySubtitle" class="subtitle"></p>
-                <div class="price-banner" id="displayPromo"></div>
+                <div class="hero-badges-row">
+                  <div class="price-banner" id="displayPromo"></div>
+                  <div class="double-chance-banner hidden" id="displayDoubleBadge">🎯 ¡Cada boleto incluye 2 números!</div>
+                </div>
               </div>
               <div id="displayImages" class="raffle-images"></div>
             </div>
@@ -113,7 +116,7 @@
 
         <div class="toolbar-card">
           <div class="search-box">
-            <input type="search" id="ticketSearchInput" placeholder="Buscar por número, participante o teléfono..." />
+            <input type="search" id="ticketSearchInput" placeholder="Buscar por número (principal o doble), participante o teléfono..." />
           </div>
           <div class="filter-pills">
             <button class="pill active" data-filter="all">Todos (<span id="countAll">0</span>)</button>
@@ -149,7 +152,8 @@
             <table class="data-table">
               <thead>
                 <tr>
-                  <th>#</th>
+                  <th># Boleto</th>
+                  <th id="thDoubleCol" class="hidden">2° Número</th>
                   <th>Vendedor Asignado</th>
                   <th>Registrado por</th>
                   <th>Participante</th>
@@ -318,6 +322,18 @@
                   <input type="number" id="cfgTicketPrice" min="1" step="0.01" required />
                 </div>
               </div>
+
+              <div class="double-config-box">
+                <label class="checkbox-label">
+                  <input type="checkbox" id="cfgDoubleChance" />
+                  <strong>Cada participación vale el doble (2 números por boleto)</strong>
+                </label>
+                <small style="display:block; margin-top:4px; color:#334155;">
+                  Mantiene los boletos ordenados del 1 al N y asigna a cada uno un segundo número aleatorio sin repetir del N+1 al 2N.
+                </small>
+                <button type="button" id="btnRegenerateDouble" class="btn btn-sm btn-ghost mt-8 hidden">🔀 Mezclar segundos números de nuevo</button>
+              </div>
+
               <div class="form-group">
                 <label>Promociones / Paquetes (ej. 1x $50 | 3x $130)</label>
                 <input type="text" id="cfgPromoText" />
@@ -449,7 +465,7 @@
         <div class="grid-2-col">
           <div class="card">
             <h3>🏆 Selección del Ganador</h3>
-            <p>Selecciona aleatoriamente un boleto entre los participantes registrados.</p>
+            <p>Selecciona aleatoriamente un número entre los participantes registrados.</p>
             <div class="form-group">
               <label class="checkbox-label">
                 <input type="checkbox" id="winnerOnlyPaid" checked />
@@ -493,7 +509,7 @@
     <div class="modal-backdrop" data-close="ticketModal"></div>
     <div class="modal-dialog">
       <div class="modal-header">
-        <h3>Boleto #<span id="modalTicketNumber"></span></h3>
+        <h3>Boleto #<span id="modalTicketNumber"></span> <span id="modalDoubleBadge" class="tag tag-double hidden"></span></h3>
         <button type="button" class="modal-close" data-close="ticketModal">&times;</button>
       </div>
       <form id="ticketForm">
