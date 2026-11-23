@@ -140,7 +140,7 @@
 
         <div class="toolbar-card">
           <div class="search-box">
-            <input type="search" id="ticketSearchInput" placeholder="Buscar por número (principal o doble), participante o teléfono..." />
+            <input type="search" id="ticketSearchInput" placeholder="Buscar por número (principal o extra), participante o teléfono..." />
           </div>
           <div class="filter-pills">
             <button class="pill active" data-filter="all">Todos (<span id="countAll">0</span>)</button>
@@ -177,7 +177,7 @@
               <thead>
                 <tr>
                   <th># Boleto</th>
-                  <th id="thDoubleCol" class="hidden">2° Número</th>
+                  <th id="thDoubleCol" class="hidden">Extras</th>
                   <th>Vendedor Asignado</th>
                   <th>Registrado por</th>
                   <th>Participante</th>
@@ -271,37 +271,19 @@
               <button type="button" id="btnSaveDistMode" class="btn btn-sm btn-primary mt-8">Aplicar Modalidad</button>
             </div>
             <hr />
-            <h4>Asignación Automática Equitativa</h4>
-            <p class="alert-warning mt-8">Solo se asigna una vez por vendedor. Quienes ya tengan boletos asignados no volverán a recibir más.</p>
-            <div class="form-row">
-              <div class="form-group">
-                <label>Boletos por vendedor activo sin asignar</label>
-                <input type="number" id="autoAssignCount" min="1" value="10" />
-              </div>
-              <div class="form-group">
-                <label>Orden</label>
-                <select id="autoAssignShuffle">
-                  <option value="false">Consecutivo (1, 2, 3...)</option>
-                  <option value="true">Aleatorio sin duplicados</option>
-                </select>
-              </div>
+            <h4>Reparto Equitativo Automático</h4>
+            <p class="alert-warning mt-8">Se reparte equitativamente entre el total de vendedores activos sin asignar. Si sobran boletos, se asignan aleatoriamente de 1 en 1 de forma equitativa. Solo se asigna 1 vez por vendedor.</p>
+            <div class="form-group">
+              <label>Orden de los boletos</label>
+              <select id="autoAssignShuffle">
+                <option value="false">Consecutivo (1, 2, 3...)</option>
+                <option value="true">Aleatorio sin duplicados</option>
+              </select>
             </div>
             <div class="btn-row">
-              <button type="button" id="btnAutoAssign" class="btn btn-accent">Distribuir Automáticamente</button>
+              <button type="button" id="btnAutoAssign" class="btn btn-accent">Distribuir Equitativamente</button>
               <button type="button" id="btnClearAssign" class="btn btn-danger-outline">Limpiar Asignaciones</button>
             </div>
-            <hr />
-            <h4>Asignación Manual por Vendedor (1 sola vez)</h4>
-            <div class="form-group">
-              <label>Seleccionar Vendedor</label>
-              <select id="manualAssignVendor"></select>
-              <small id="manualVendorWarning" style="color:var(--danger); font-weight:600; display:block; margin-top:4px;"></small>
-            </div>
-            <div class="form-group">
-              <label>Números o rangos (ej: 1-10, 25, 30-35)</label>
-              <input type="text" id="manualAssignInput" placeholder="1-10, 15, 20" />
-            </div>
-            <button type="button" id="btnManualAssign" class="btn btn-primary">Guardar Asignación Manual</button>
           </div>
         </div>
 
@@ -351,14 +333,14 @@
               </div>
 
               <div class="double-config-box">
-                <label class="checkbox-label">
-                  <input type="checkbox" id="cfgDoubleChance" />
-                  <strong>Cada participación vale el doble (2 números por boleto)</strong>
-                </label>
-                <small style="display:block; margin-top:4px; color:#334155;">
-                  Mantiene los boletos ordenados del 1 al N y asigna a cada uno un segundo número aleatorio sin repetir del N+1 al 2N.
+                <div class="form-group" style="margin-bottom:4px;">
+                  <label for="cfgNumbersPerTicket">¿Por cuánto vale cada boleto? (números totales por boleto)</label>
+                  <input type="number" id="cfgNumbersPerTicket" min="1" max="20" step="1" />
+                </div>
+                <small id="extraTicketsHint" style="display:block; margin-top:4px; color:#334155;">
+                  1 = sin números extra. Si pones 2, cada boleto agrega 1 número extra aleatorio sin repetir; si pones 3, agrega 2 extras aleatorios sin repetir, etc.
                 </small>
-                <button type="button" id="btnRegenerateDouble" class="btn btn-sm btn-ghost mt-8 hidden">🔀 Mezclar segundos números de nuevo</button>
+                <button type="button" id="btnRegenerateExtra" class="btn btn-sm btn-ghost mt-8 hidden">🔀 Mezclar números extra de nuevo</button>
               </div>
 
               <div class="form-group">
