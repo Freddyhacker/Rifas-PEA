@@ -1,5 +1,5 @@
 /**
- * GESTOR DE RIFAS PRO - FRONTEND SPA + PWA (v3.1)
+ * GESTOR DE RIFAS PRO - FRONTEND SPA + PWA (v3.2)
  */
 
 const DEFAULT_GAS_ENDPOINT = 'https://script.google.com/macros/s/AKfycbyzny4C1WxdYv_9jY0hqKZ3yyn75DlbUyoCFohNUINeaEQdZ4Sj6zqAXCpNAguU2TPwLw/exec';
@@ -23,7 +23,7 @@ const state = {
 };
 
 document.addEventListener('DOMContentLoaded', () => {
-  if (state.endpoint.includes('REEMPLAZA_CON_TU_ID') && !DEFAULT_GAS_ENDPOINT.includes('REEMPLAZA_CON_TU_ID')) {
+  if (!DEFAULT_GAS_ENDPOINT.includes('REEMPLAZA_CON_TU_ID')) {
     state.endpoint = DEFAULT_GAS_ENDPOINT;
     localStorage.setItem('rifas_gas_url', DEFAULT_GAS_ENDPOINT);
   }
@@ -71,7 +71,7 @@ async function apiCall(action, data = {}) {
   }
   const cleanUrl = (state.endpoint || '').trim();
   if (!cleanUrl || cleanUrl.includes('REEMPLAZA_CON_TU_ID')) {
-    throw new Error('Configura primero la URL de Google Apps Script en el botón inferior.');
+    throw new Error('Falta configurar la URL de Google Apps Script en app.js.');
   }
 
   const payloadObj = {
@@ -102,7 +102,7 @@ async function apiCall(action, data = {}) {
         redirect: 'follow'
       });
     } catch (getErr) {
-      throw new Error('No se pudo conectar con Google Apps Script. Verifica que la implementación tenga acceso para "Cualquier usuario".');
+      throw new Error('No se pudo conectar al servidor. Revisa que el script esté publicado para "Cualquier usuario".');
     }
   }
 
@@ -111,7 +111,7 @@ async function apiCall(action, data = {}) {
   try {
     result = JSON.parse(text);
   } catch (_) {
-    throw new Error('Respuesta inválida del servidor. Verifica que la URL termine en /exec y sea pública.');
+    throw new Error('El servidor devolvió una respuesta no válida (revisa permisos de ejecución del script).');
   }
 
   if (!result.ok) {
@@ -1046,20 +1046,6 @@ function bindEvents() {
       showToast(res.message, 'success');
       await syncData(true);
     } catch (err) { showToast(err.message, 'error'); }
-  });
-
-  document.getElementById('btnConfigEndpoint').addEventListener('click', () => {
-    document.getElementById('gasUrlInput').value = state.endpoint.includes('REEMPLAZA') ? '' : state.endpoint;
-    document.getElementById('endpointModal').classList.remove('hidden');
-  });
-
-  document.getElementById('endpointForm').addEventListener('submit', (e) => {
-    e.preventDefault();
-    const url = document.getElementById('gasUrlInput').value.trim();
-    state.endpoint = url;
-    localStorage.setItem('rifas_gas_url', url);
-    closeModal('endpointModal');
-    showToast('URL del backend guardada.', 'success');
   });
 
   document.querySelectorAll('[data-close]').forEach(el => {
