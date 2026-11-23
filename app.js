@@ -2,7 +2,7 @@
  * GESTOR DE RIFAS PRO - FRONTEND SPA + PWA (v3.3)
  */
 
-const DEFAULT_GAS_ENDPOINT = 'https://script.google.com/macros/s/AKfycbyzny4C1WxdYv_9jY0hqKZ3yyn75DlbUyoCFohNUINeaEQdZ4Sj6zqAXCpNAguU2TPwLw/exec';
+const DEFAULT_GAS_ENDPOINT = 'https://script.google.com/macros/s/AKfycbwOtmUVlM3mcEiPa2BmNP3Q9yDqwUVN_-GsvqWnMmQmVZyhkkVfLygVuL_-HrYM-FnhpA/exec';
 const SNAPSHOT_KEY = 'rifas_last_snapshot_v1';
 
 const state = {
