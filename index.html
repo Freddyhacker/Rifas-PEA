@@ -30,7 +30,7 @@
       <form id="loginForm">
         <div class="form-group">
           <label for="loginUsername">Usuario</label>
-          <input type="text" id="loginUsername" autocomplete="username" required placeholder="Ej. admin" />
+          <input type="text" id="loginUsername" autocomplete="username" required placeholder="Usuario" />
         </div>
         <div class="form-group">
           <label for="loginPassword">Contraseña</label>
@@ -38,9 +38,6 @@
         </div>
         <button type="submit" id="loginBtn" class="btn btn-primary btn-block">Iniciar Sesión</button>
       </form>
-      <div class="login-footer">
-        <button type="button" id="btnConfigEndpoint" class="btn-link">Configurar URL del Servidor (GAS)</button>
-      </div>
     </div>
   </section>
 
@@ -580,25 +577,6 @@
         <div class="modal-footer">
           <button type="button" class="btn btn-ghost" data-close="resetModal">Cancelar</button>
           <button type="submit" class="btn btn-danger">Confirmar y Crear Nueva Rifa</button>
-        </div>
-      </form>
-    </div>
-  </div>
-
-  <div id="endpointModal" class="modal hidden">
-    <div class="modal-backdrop" data-close="endpointModal"></div>
-    <div class="modal-dialog">
-      <div class="modal-header">
-        <h3>Conexión con Google Apps Script</h3>
-        <button type="button" class="modal-close" data-close="endpointModal">&times;</button>
-      </div>
-      <form id="endpointForm">
-        <div class="form-group">
-          <label>URL de la Aplicación Web (termina en /exec)</label>
-          <input type="url" id="gasUrlInput" required placeholder="https://script.google.com/macros/s/.../exec" />
-        </div>
-        <div class="modal-footer">
-          <button type="submit" class="btn btn-primary">Guardar Conexión</button>
         </div>
       </form>
     </div>
