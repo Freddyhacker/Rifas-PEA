@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <meta name="theme-color" content="#2563eb" />
+  <meta name="theme-color" content="#102442" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <title>Gestor de Rifas Pro</title>
@@ -71,44 +71,71 @@
     <main class="main-content">
       <section id="tabBoletos" class="tab-panel active">
         <div id="raffleHeaderCard" class="raffle-header-card">
-          <div class="raffle-hero">
-            <div class="raffle-hero-top">
-              <div class="raffle-title-block">
-                <h1 id="displayTitle">Cargando rifa...</h1>
-                <p id="displaySubtitle" class="subtitle"></p>
-                <div class="hero-badges-row">
-                  <div class="price-banner" id="displayPromo"></div>
-                  <div class="double-chance-banner hidden" id="displayDoubleBadge">🎯 ¡Cada boleto incluye 2 números!</div>
-                </div>
-              </div>
-              <div id="displayImages" class="raffle-images"></div>
+          <div class="raffle-top-banner">
+            <div class="raffle-title-block">
+              <h1 id="displayTitle">GRAN RIFA ESPECIAL</h1>
+              <p id="displaySubtitle" class="subtitle">¡Participa y gana increíbles premios!</p>
             </div>
-
-            <div class="raffle-details-grid">
-              <div class="detail-box">
-                <span class="detail-box-label">🏆 Premios</span>
-                <span class="detail-box-value" id="displayPrizes"></span>
-              </div>
-              <div class="detail-box">
-                <span class="detail-box-label">🎯 Motivo</span>
-                <span class="detail-box-value" id="displayReason"></span>
-              </div>
-              <div class="detail-box">
-                <span class="detail-box-label">📅 Fecha del Sorteo</span>
-                <span class="detail-box-value" id="displayDate"></span>
-              </div>
-              <div class="detail-box">
-                <span class="detail-box-label">📢 Medio de Anuncio</span>
-                <span class="detail-box-value" id="displayAnnouncement"></span>
-              </div>
-              <div class="detail-box">
-                <span class="detail-box-label">🎲 Selección del Ganador</span>
-                <span class="detail-box-value" id="displayWinnerMethod"></span>
-              </div>
+            <div class="trophy-3d-wrap" aria-hidden="true">
+              <span class="trophy-3d-icon">🏆</span>
             </div>
           </div>
 
+          <div class="raffle-single-body">
+            <div class="promo-pills-row">
+              <div class="promo-pill">
+                <span>✦</span>
+                <span id="displayPromoDouble">Cada participación vale el doble.</span>
+              </div>
+              <div class="promo-pill">
+                <span>🎟️</span>
+                <span id="displayPromoTickets">2 números por boleto.</span>
+              </div>
+            </div>
+
+            <div class="prizes-zone">
+              <div class="prizes-heading">🏆 PREMIOS</div>
+              <div class="prizes-two-col">
+                <div class="prize-line">
+                  <span class="prize-label">🥇 PRIMER LUGAR:</span>
+                  <span class="prize-val" id="displayFirstPrize">Premio a elegir.</span>
+                </div>
+                <div class="prize-line">
+                  <span class="prize-label">🥈 SEGUNDO LUGAR:</span>
+                  <span class="prize-val-amount" id="displaySecondPrize">$5,000.</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="raffle-four-grid">
+              <div class="raffle-four-item">
+                <span class="raffle-four-icon">🎯</span>
+                <span class="raffle-four-key">MOTIVO:</span>
+                <span class="raffle-four-desc" id="displayReason">Equipo Evangelismo.</span>
+              </div>
+              <div class="raffle-four-item">
+                <span class="raffle-four-icon">📅</span>
+                <span class="raffle-four-key">FECHA:</span>
+                <span class="raffle-four-desc" id="displayDate">Por confirmar.</span>
+              </div>
+              <div class="raffle-four-item">
+                <span class="raffle-four-icon">📢</span>
+                <span class="raffle-four-key">ANUNCIO:</span>
+                <span class="raffle-four-desc" id="displayAnnouncement">Redes sociales.</span>
+              </div>
+              <div class="raffle-four-item">
+                <span class="raffle-four-icon">🎲</span>
+                <span class="raffle-four-key">GANADOR:</span>
+                <span class="raffle-four-desc" id="displayWinnerMethod">Últimos 3 dígitos de la Lotería Nacional.</span>
+              </div>
+            </div>
+
+            <div id="displayImages" class="raffle-images"></div>
+          </div>
+
           <div id="winnerBanner" class="winner-banner hidden"></div>
+
+          <div class="raffle-footer-bar">✦ ¡MUCHA SUERTE A TODOS! ✦</div>
         </div>
 
         <div class="toolbar-card">
@@ -334,7 +361,7 @@
               </div>
 
               <div class="form-group">
-                <label>Promociones / Paquetes (ej. 1x $50 | 3x $130)</label>
+                <label>Promociones / Paquetes</label>
                 <input type="text" id="cfgPromoText" />
               </div>
               <div class="form-group">
@@ -348,7 +375,7 @@
               <div class="form-row">
                 <div class="form-group">
                   <label>Fecha del sorteo</label>
-                  <input type="text" id="cfgEventDate" placeholder="2026-12-20 20:00" />
+                  <input type="text" id="cfgEventDate" />
                 </div>
                 <div class="form-group">
                   <label>Duración de apartados (horas)</label>
