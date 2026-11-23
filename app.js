@@ -1,11 +1,11 @@
 /**
- * GESTOR DE RIFAS PRO - FRONTEND SPA + PWA (v2)
+ * GESTOR DE RIFAS PRO - FRONTEND SPA + PWA (v3)
  */
 
-const DEFAULT_GAS_ENDPOINT = 'https://script.google.com/macros/s/AKfycbxpwjnw4awqaZMvugTWmSOK7bZLFE5reckrWO2Vm0UQUGLZWlXBY2Xcdp_0y1g8HbnNmA/exec';
+const DEFAULT_GAS_ENDPOINT = 'https://script.google.com/macros/s/REEMPLAZA_CON_TU_ID/exec';
 
 const state = {
-  endpoint: localStorage.getItem('rifas_gas_url') || DEFAULT_GAS_ENDPOINT,
+  endpoint: (localStorage.getItem('rifas_gas_url') || DEFAULT_GAS_ENDPOINT).trim(),
   token: localStorage.getItem('rifas_session_token') || '',
   user: null,
   config: null,
@@ -23,6 +23,12 @@ const state = {
 };
 
 document.addEventListener('DOMContentLoaded', () => {
+  // Si localStorage tenía guardada una URL de ejemplo inválida, limpiarla
+  if (state.endpoint.includes('REEMPLAZA_CON_TU_ID') && !DEFAULT_GAS_ENDPOINT.includes('REEMPLAZA_CON_TU_ID')) {
+    state.endpoint = DEFAULT_GAS_ENDPOINT;
+    localStorage.setItem('rifas_gas_url', DEFAULT_GAS_ENDPOINT);
+  }
+
   registerServiceWorker();
   bindEvents();
   updateOnlineStatus();
@@ -37,7 +43,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
 function registerServiceWorker() {
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('./sw.js').catch(() => {});
+    navigator.serviceWorker.register('./sw.js').then((reg) => {
+      reg.update().catch(() => {});
+    }).catch(() => {});
   }
 
   window.addEventListener('beforeinstallprompt', (e) => {
@@ -62,21 +70,53 @@ async function apiCall(action, data = {}) {
   if (!navigator.onLine) {
     throw new Error('Sin conexión a internet. Verifica tu red para continuar.');
   }
-  if (!state.endpoint || state.endpoint.includes('REEMPLAZA_CON_TU_ID')) {
+  const cleanUrl = (state.endpoint || '').trim();
+  if (!cleanUrl || cleanUrl.includes('REEMPLAZA_CON_TU_ID')) {
     throw new Error('Configura primero la URL de Google Apps Script en el botón inferior.');
   }
 
-  const response = await fetch(state.endpoint, {
-    method: 'POST',
-    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-    body: JSON.stringify({
-      action: action,
-      token: state.token,
-      data: data
-    })
-  });
+  const payloadObj = {
+    action: action,
+    token: state.token,
+    data: data
+  };
+  const payloadStr = JSON.stringify(payloadObj);
 
-  const result = await response.json();
+  let response;
+  try {
+    // credentials: 'omit' evita bloqueos de cookies en Safari/Chrome móvil al redirigir GAS
+    response = await fetch(cleanUrl, {
+      method: 'POST',
+      mode: 'cors',
+      credentials: 'omit',
+      redirect: 'follow',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: payloadStr
+    });
+  } catch (postErr) {
+    // Fallback automático por GET si la red móvil interrumpe redirecciones POST
+    const sep = cleanUrl.includes('?') ? '&' : '?';
+    const getUrl = `${cleanUrl}${sep}payload=${encodeURIComponent(payloadStr)}`;
+    try {
+      response = await fetch(getUrl, {
+        method: 'GET',
+        mode: 'cors',
+        credentials: 'omit',
+        redirect: 'follow'
+      });
+    } catch (getErr) {
+      throw new Error('No se pudo conectar con Google Apps Script. Verifica que la implementación tenga acceso para "Cualquier usuario".');
+    }
+  }
+
+  const text = await response.text();
+  let result;
+  try {
+    result = JSON.parse(text);
+  } catch (_) {
+    throw new Error('Respuesta inválida del servidor. Verifica que la URL termine en /exec y sea pública.');
+  }
+
   if (!result.ok) {
     if (result.code === 'UNAUTHORIZED') {
       forceLogout();
@@ -161,7 +201,13 @@ async function syncData(forceFull = false) {
       state.version = res.version;
       state.config = res.config;
       state.user = res.user;
-      state.tickets = res.tickets || [];
+      state.tickets = (res.tickets || []).map(t => {
+        // Asegurar segundoNumero desde config.doubleMap si está activo
+        const sec = (res.config.doubleChance && res.config.doubleMap)
+          ? (t.segundoNumero || res.config.doubleMap[String(t.numero)] || null)
+          : null;
+        return { ...t, segundoNumero: sec };
+      });
       if (res.users) state.users = res.users;
       if (res.history) state.history = res.history;
       if (res.backups) state.backups = res.backups;
@@ -245,6 +291,9 @@ function renderRaffleHeader() {
   document.getElementById('displayAnnouncement').textContent = cfg.announcementMethod;
   document.getElementById('displayWinnerMethod').textContent = cfg.winnerMethod;
 
+  const doubleBadge = document.getElementById('displayDoubleBadge');
+  doubleBadge.classList.toggle('hidden', !cfg.doubleChance);
+
   const imgBox = document.getElementById('displayImages');
   imgBox.innerHTML = '';
   (cfg.images || []).forEach(src => {
@@ -257,7 +306,8 @@ function renderRaffleHeader() {
   const winnerBanner = document.getElementById('winnerBanner');
   if (cfg.winnerResult) {
     winnerBanner.classList.remove('hidden');
-    winnerBanner.textContent = `🏆 NÚMERO GANADOR SELECCIONADO: #${cfg.winnerResult.numero} — ${cfg.winnerResult.participante} (Seleccionado el ${formatDate(cfg.winnerResult.selectedAt)})`;
+    const bPrincipal = cfg.winnerResult.boletoPrincipal ? ` (Boleto #${cfg.winnerResult.boletoPrincipal})` : '';
+    winnerBanner.textContent = `🏆 NÚMERO GANADOR SELECCIONADO: #${cfg.winnerResult.numero}${bPrincipal} — ${cfg.winnerResult.participante} (${formatDate(cfg.winnerResult.selectedAt)})`;
   } else {
     winnerBanner.classList.add('hidden');
   }
@@ -266,6 +316,7 @@ function renderRaffleHeader() {
 function renderTicketsGrid() {
   const grid = document.getElementById('ticketsGrid');
   const q = state.searchQuery.toLowerCase();
+  const isDouble = Boolean(state.config && state.config.doubleChance);
 
   let disp = 0, apar = 0, vend = 0;
   state.tickets.forEach(t => {
@@ -283,9 +334,10 @@ function renderTicketsGrid() {
     if (state.currentFilter !== 'all' && t.estado !== state.currentFilter) return false;
     if (q) {
       const matchNum = String(t.numero).includes(q);
+      const matchSec = t.segundoNumero && String(t.segundoNumero).includes(q);
       const matchName = (t.participante || '').toLowerCase().includes(q);
       const matchPhone = (t.telefono || '').toLowerCase().includes(q);
-      return matchNum || matchName || matchPhone;
+      return matchNum || matchSec || matchName || matchPhone;
     }
     return true;
   });
@@ -300,8 +352,13 @@ function renderTicketsGrid() {
       ? (ticket.vendedorAsignado ? `Asig: ${ticket.vendedorAsignado}` : 'Libre')
       : ticket.participante;
 
+    const doubleHtml = (isDouble && ticket.segundoNumero)
+      ? `<span class="ticket-double-pill">+ #${ticket.segundoNumero}</span>`
+      : '';
+
     cell.innerHTML = `
       <span class="ticket-num">${ticket.numero}</span>
+      ${doubleHtml}
       <span class="ticket-sub">${escapeHtml(label)}</span>
     `;
     cell.addEventListener('click', () => openTicketModal(ticket));
@@ -314,6 +371,15 @@ function renderTicketsGrid() {
 function openTicketModal(ticket) {
   document.getElementById('modalTicketNumber').textContent = ticket.numero;
   document.getElementById('modalTicketNumInput').value = ticket.numero;
+
+  const doubleModalBadge = document.getElementById('modalDoubleBadge');
+  if (state.config && state.config.doubleChance && ticket.segundoNumero) {
+    doubleModalBadge.textContent = `2° Número: #${ticket.segundoNumero}`;
+    doubleModalBadge.classList.remove('hidden');
+  } else {
+    doubleModalBadge.classList.add('hidden');
+  }
+
   document.getElementById('modalParticipant').value = ticket.participante || '';
   document.getElementById('modalPhone').value = ticket.telefono || '';
   document.getElementById('modalPayStatus').value = ticket.estadoPago || 'pendiente';
@@ -321,6 +387,9 @@ function openTicketModal(ticket) {
 
   const metaBox = document.getElementById('modalTicketMeta');
   let metaLines = [];
+  if (state.config && state.config.doubleChance && ticket.segundoNumero) {
+    metaLines.push(`Participa con los números <strong>#${ticket.numero}</strong> y <strong>#${ticket.segundoNumero}</strong>`);
+  }
   if (ticket.vendedorAsignado) metaLines.push(`Asignado a: <strong>${escapeHtml(ticket.vendedorAsignado)}</strong>`);
   if (ticket.vendedorRegistro) metaLines.push(`Registrado por: <strong>${escapeHtml(ticket.vendedorRegistro)}</strong>`);
   if (ticket.estado === 'apartado' && ticket.fechaVencimiento) {
@@ -379,6 +448,9 @@ async function handleReleaseTicketClick() {
 function renderAdminTable() {
   const tbody = document.getElementById('adminTicketsTableBody');
   const vendorSelect = document.getElementById('adminFilterVendor');
+  const isDouble = Boolean(state.config && state.config.doubleChance);
+
+  document.getElementById('thDoubleCol').classList.toggle('hidden', !isDouble);
 
   const currentVendorFilter = vendorSelect.value;
   vendorSelect.innerHTML = '<option value="">Todos los vendedores</option>';
@@ -407,6 +479,7 @@ function renderAdminTable() {
     }
     if (q) {
       return String(t.numero).includes(q) ||
+        (t.segundoNumero && String(t.segundoNumero).includes(q)) ||
         (t.participante || '').toLowerCase().includes(q) ||
         (t.telefono || '').toLowerCase().includes(q);
     }
@@ -425,9 +498,14 @@ function renderAdminTable() {
       if (diffH <= 3) expText = `<span class="tag tag-warn">Pronto: ${expText}</span>`;
     }
 
+    const doubleCell = isDouble
+      ? `<td><span class="tag tag-double">#${t.segundoNumero || '-'}</span></td>`
+      : '';
+
     return `
       <tr>
         <td><strong>#${t.numero}</strong></td>
+        ${doubleCell}
         <td>${escapeHtml(t.vendedorAsignado || '-')}</td>
         <td>${escapeHtml(t.vendedorRegistro || '-')}</td>
         <td>${escapeHtml(t.participante || '-')}</td>
@@ -452,18 +530,25 @@ function exportToExcel() {
     return;
   }
 
-  const dataRows = state.tickets.map(t => ({
-    'Número': t.numero,
-    'Estado Venta': t.estado.toUpperCase(),
-    'Estado Pago': t.estado === 'disponible' ? '' : t.estadoPago.toUpperCase(),
-    'Participante': t.participante,
-    'Teléfono': t.telefono,
-    'Vendedor Asignado': t.vendedorAsignado,
-    'Vendedor Registro': t.vendedorRegistro,
-    'Fecha Registro': t.fechaRegistro ? formatDate(t.fechaRegistro) : '',
-    'Vencimiento Apartado': t.fechaVencimiento ? formatDate(t.fechaVencimiento) : '',
-    'Notas': t.notas
-  }));
+  const isDouble = Boolean(state.config && state.config.doubleChance);
+  const dataRows = state.tickets.map(t => {
+    const row = {
+      'Número Principal': t.numero
+    };
+    if (isDouble) {
+      row['Segundo Número (Doble)'] = t.segundoNumero || '';
+    }
+    row['Estado Venta'] = t.estado.toUpperCase();
+    row['Estado Pago'] = t.estado === 'disponible' ? '' : t.estadoPago.toUpperCase();
+    row['Participante'] = t.participante;
+    row['Teléfono'] = t.telefono;
+    row['Vendedor Asignado'] = t.vendedorAsignado;
+    row['Vendedor Registro'] = t.vendedorRegistro;
+    row['Fecha Registro'] = t.fechaRegistro ? formatDate(t.fechaRegistro) : '';
+    row['Vencimiento Apartado'] = t.fechaVencimiento ? formatDate(t.fechaVencimiento) : '';
+    row['Notas'] = t.notas;
+    return row;
+  });
 
   const ws = XLSX.utils.json_to_sheet(dataRows);
   const wb = XLSX.utils.book_new();
@@ -483,7 +568,7 @@ function renderStats() {
   const pct = total > 0 ? Math.round(((vend + apar) / total) * 100) : 0;
 
   document.getElementById('kpiGrid').innerHTML = `
-    <div class="kpi-card"><span>Total de Boletos</span><strong>${total}</strong></div>
+    <div class="kpi-card"><span>Total de Boletos</span><strong>${total}${state.config.doubleChance ? ` (${total * 2} núms)` : ''}</strong></div>
     <div class="kpi-card"><span>Disponibles</span><strong>${disp}</strong></div>
     <div class="kpi-card"><span>Apartados (Pendientes)</span><strong>${apar}</strong></div>
     <div class="kpi-card"><span>Vendidos (Pagados)</span><strong>${vend}</strong></div>
@@ -610,6 +695,8 @@ function populateConfigForm() {
   document.getElementById('cfgSubtitle').value = c.subtitle || '';
   document.getElementById('cfgTotalTickets').value = c.totalTickets || 100;
   document.getElementById('cfgTicketPrice').value = c.ticketPrice || 50;
+  document.getElementById('cfgDoubleChance').checked = Boolean(c.doubleChance);
+  document.getElementById('btnRegenerateDouble').classList.toggle('hidden', !c.doubleChance);
   document.getElementById('cfgPromoText').value = c.promoText || '';
   document.getElementById('cfgPrizesText').value = c.prizesText || '';
   document.getElementById('cfgReasonText').value = c.reasonText || '';
@@ -674,8 +761,8 @@ function handlePrizeImageUpload(e) {
   });
 }
 
-async function handleSaveConfigSubmit(e) {
-  e.preventDefault();
+async function handleSaveConfigSubmit(e, regenerateDoubleMap = false) {
+  if (e) e.preventDefault();
   const btn = document.getElementById('btnSaveConfig');
   btn.disabled = true;
   btn.textContent = 'Guardando configuración...';
@@ -686,6 +773,8 @@ async function handleSaveConfigSubmit(e) {
       subtitle: document.getElementById('cfgSubtitle').value,
       totalTickets: Number(document.getElementById('cfgTotalTickets').value),
       ticketPrice: Number(document.getElementById('cfgTicketPrice').value),
+      doubleChance: document.getElementById('cfgDoubleChance').checked,
+      regenerateDoubleMap: regenerateDoubleMap,
       promoText: document.getElementById('cfgPromoText').value,
       prizesText: document.getElementById('cfgPrizesText').value,
       reasonText: document.getElementById('cfgReasonText').value,
@@ -766,6 +855,15 @@ function bindEvents() {
   const cfgForm = document.getElementById('configForm');
   cfgForm.addEventListener('input', () => { state.configDirty = true; });
   cfgForm.addEventListener('change', () => { state.configDirty = true; });
+
+  document.getElementById('cfgDoubleChance').addEventListener('change', (e) => {
+    document.getElementById('btnRegenerateDouble').classList.toggle('hidden', !e.target.checked);
+  });
+
+  document.getElementById('btnRegenerateDouble').addEventListener('click', async () => {
+    if (!confirm('¿Generar nuevos segundos números aleatorios para todos los boletos?')) return;
+    await handleSaveConfigSubmit(null, true);
+  });
 
   document.getElementById('btnInstallPwa').addEventListener('click', async () => {
     if (state.deferredInstallPrompt) {
@@ -854,7 +952,7 @@ function bindEvents() {
     } catch (err) { showToast(err.message, 'error'); }
   });
 
-  cfgForm.addEventListener('submit', handleSaveConfigSubmit);
+  cfgForm.addEventListener('submit', (e) => handleSaveConfigSubmit(e, false));
   document.getElementById('prizeImageFile').addEventListener('change', handlePrizeImageUpload);
 
   document.getElementById('btnPickWinner').addEventListener('click', async () => {
@@ -866,7 +964,8 @@ function bindEvents() {
       const box = document.getElementById('winnerResultBox');
       box.classList.remove('hidden');
       box.innerHTML = `
-        <h2>🎉 Boleto #${w.numero}</h2>
+        <h2>🎉 Número Ganador: #${w.numero}</h2>
+        ${w.boletoPrincipal ? `<p><strong>Boleto registrado:</strong> #${w.boletoPrincipal}</p>` : ''}
         <p><strong>Participante:</strong> ${escapeHtml(w.participante)}</p>
         <p><strong>Teléfono:</strong> ${escapeHtml(w.telefono)}</p>
         <p><strong>Vendedor:</strong> ${escapeHtml(w.vendedor)}</p>
@@ -945,7 +1044,7 @@ function showToast(msg, type = 'info') {
   el.className = `toast ${type}`;
   el.textContent = msg;
   container.appendChild(el);
-  setTimeout(() => el.remove(), 4000);
+  setTimeout(() => el.remove(), 4500);
 }
 
 function formatDate(iso) {
