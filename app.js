@@ -1,8 +1,8 @@
 /**
- * GESTOR DE RIFAS PRO - FRONTEND SPA + PWA
+ * GESTOR DE RIFAS PRO - FRONTEND SPA + PWA (v2)
  */
 
-const DEFAULT_GAS_ENDPOINT = 'https://script.google.com/macros/s/AKfycbxpwjnw4awqaZMvugTWmSOK7bZLFE5reckrWO2Vm0UQUGLZWlXBY2Xcdp_0y1g8HbnNmA/exec';
+const DEFAULT_GAS_ENDPOINT = 'https://script.google.com/macros/s/REEMPLAZA_CON_TU_ID/exec';
 
 const state = {
   endpoint: localStorage.getItem('rifas_gas_url') || DEFAULT_GAS_ENDPOINT,
@@ -18,7 +18,8 @@ const state = {
   searchQuery: '',
   syncTimer: null,
   deferredInstallPrompt: null,
-  tempConfigImages: []
+  tempConfigImages: [],
+  configDirty: false
 };
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -136,7 +137,7 @@ function startAutoSync() {
     if (navigator.onLine && !document.hidden) {
       syncData(false);
     }
-  }, 12000);
+  }, 15000);
 }
 
 function stopAutoSync() {
@@ -166,7 +167,7 @@ async function syncData(forceFull = false) {
       if (res.backups) state.backups = res.backups;
 
       applyVisualTheme();
-      renderAll();
+      renderAll(forceFull);
     }
 
     indicator.textContent = '● Sincronizado';
@@ -197,17 +198,17 @@ function applyVisualTheme() {
   root.style.setProperty('--accent', cfg.accentColor || '#10b981');
   root.style.setProperty('--cols-desktop', cfg.gridColsDesktop || 10);
   root.style.setProperty('--cols-mobile', cfg.gridColsMobile || 5);
-  root.style.setProperty('--header-font', (cfg.headerFontSize || 26) + 'px');
+  root.style.setProperty('--header-font', (cfg.headerFontSize || 28) + 'px');
   root.style.setProperty('--body-font', (cfg.bodyFontSize || 15) + 'px');
 
   const headerCard = document.getElementById('raffleHeaderCard');
   headerCard.style.paddingTop = (cfg.headerPadTop ?? 24) + 'px';
   headerCard.style.paddingBottom = (cfg.headerPadBottom ?? 24) + 'px';
-  headerCard.style.paddingLeft = (cfg.headerPadLeft ?? 16) + 'px';
-  headerCard.style.paddingRight = (cfg.headerPadRight ?? 16) + 'px';
+  headerCard.style.paddingLeft = (cfg.headerPadLeft ?? 20) + 'px';
+  headerCard.style.paddingRight = (cfg.headerPadRight ?? 20) + 'px';
 }
 
-function renderAll() {
+function renderAll(forceFormRefresh = false) {
   if (!state.user || !state.config) return;
 
   const isAdmin = state.user.role === 'admin';
@@ -225,7 +226,9 @@ function renderAll() {
     renderAdminTable();
     renderStats();
     renderUsersAndAssignments();
-    populateConfigForm();
+    if (!state.configDirty || forceFormRefresh) {
+      populateConfigForm();
+    }
     renderHistory();
     renderBackups();
   }
@@ -525,6 +528,7 @@ function renderUsersAndAssignments() {
   document.getElementById('cfgDistModeQuick').value = state.config.distributionMode || 'A';
 
   const manualSel = document.getElementById('manualAssignVendor');
+  const currentManual = manualSel.value;
   manualSel.innerHTML = '';
   state.users.filter(u => u.role === 'vendedor').forEach(u => {
     const opt = document.createElement('option');
@@ -532,6 +536,7 @@ function renderUsersAndAssignments() {
     opt.textContent = `${u.username} (${u.assignedTickets.length} asignados)`;
     manualSel.appendChild(opt);
   });
+  if (currentManual) manualSel.value = currentManual;
 
   document.getElementById('usersTableBody').innerHTML = state.users.map(u => `
     <tr>
@@ -618,14 +623,15 @@ function populateConfigForm() {
   document.getElementById('cfgColsMobile').value = c.gridColsMobile || 5;
   document.getElementById('cfgPrimaryColor').value = c.primaryColor || '#2563eb';
   document.getElementById('cfgAccentColor').value = c.accentColor || '#10b981';
-  document.getElementById('cfgHeaderFontSize').value = c.headerFontSize || 26;
+  document.getElementById('cfgHeaderFontSize').value = c.headerFontSize || 28;
   document.getElementById('cfgBodyFontSize').value = c.bodyFontSize || 15;
   document.getElementById('cfgPadTop').value = c.headerPadTop ?? 24;
   document.getElementById('cfgPadBottom').value = c.headerPadBottom ?? 24;
-  document.getElementById('cfgPadLeft').value = c.headerPadLeft ?? 16;
-  document.getElementById('cfgPadRight').value = c.headerPadRight ?? 16;
+  document.getElementById('cfgPadLeft').value = c.headerPadLeft ?? 20;
+  document.getElementById('cfgPadRight').value = c.headerPadRight ?? 20;
 
   state.tempConfigImages = [...(c.images || [])];
+  state.configDirty = false;
   renderConfigImagesList();
 }
 
@@ -641,6 +647,7 @@ function renderConfigImagesList() {
 
 window.removeConfigImage = function(idx) {
   state.tempConfigImages.splice(idx, 1);
+  state.configDirty = true;
   renderConfigImagesList();
 };
 
@@ -658,6 +665,7 @@ function handlePrizeImageUpload(e) {
         const ctx = canvas.getContext('2d');
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
         state.tempConfigImages.push(canvas.toDataURL('image/jpeg', 0.78));
+        state.configDirty = true;
         renderConfigImagesList();
       };
       img.src = ev.target.result;
@@ -668,6 +676,10 @@ function handlePrizeImageUpload(e) {
 
 async function handleSaveConfigSubmit(e) {
   e.preventDefault();
+  const btn = document.getElementById('btnSaveConfig');
+  btn.disabled = true;
+  btn.textContent = 'Guardando configuración...';
+
   try {
     const res = await apiCall('updateConfig', {
       title: document.getElementById('cfgTitle').value,
@@ -694,10 +706,14 @@ async function handleSaveConfigSubmit(e) {
       headerPadRight: Number(document.getElementById('cfgPadRight').value),
       images: state.tempConfigImages
     });
+    state.configDirty = false;
     showToast(res.message, 'success');
     await syncData(true);
   } catch (err) {
     showToast(err.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '💾 Guardar Toda la Configuración';
   }
 }
 
@@ -742,7 +758,14 @@ window.restoreBackupById = async function(backupId) {
 function bindEvents() {
   document.getElementById('loginForm').addEventListener('submit', handleLoginSubmit);
   document.getElementById('btnLogout').addEventListener('click', handleLogoutClick);
-  document.getElementById('btnManualSync').addEventListener('click', () => syncData(true));
+  document.getElementById('btnManualSync').addEventListener('click', () => {
+    state.configDirty = false;
+    syncData(true);
+  });
+
+  const cfgForm = document.getElementById('configForm');
+  cfgForm.addEventListener('input', () => { state.configDirty = true; });
+  cfgForm.addEventListener('change', () => { state.configDirty = true; });
 
   document.getElementById('btnInstallPwa').addEventListener('click', async () => {
     if (state.deferredInstallPrompt) {
@@ -831,7 +854,7 @@ function bindEvents() {
     } catch (err) { showToast(err.message, 'error'); }
   });
 
-  document.getElementById('configForm').addEventListener('submit', handleSaveConfigSubmit);
+  cfgForm.addEventListener('submit', handleSaveConfigSubmit);
   document.getElementById('prizeImageFile').addEventListener('change', handlePrizeImageUpload);
 
   document.getElementById('btnPickWinner').addEventListener('click', async () => {
