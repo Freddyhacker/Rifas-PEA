@@ -190,6 +190,14 @@ body {
   margin-top: 4px;
 }
 
+.hero-badges-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+  align-items: center;
+}
+
 .price-banner {
   display: inline-flex;
   align-items: center;
@@ -199,9 +207,21 @@ body {
   font-weight: 700;
   padding: 8px 16px;
   border-radius: 10px;
-  margin-top: 12px;
   font-size: 14px;
   box-shadow: 0 2px 6px rgba(37, 99, 235, 0.25);
+}
+
+.double-chance-banner {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #f59e0b;
+  font-weight: 700;
+  padding: 7px 14px;
+  border-radius: 10px;
+  font-size: 13px;
 }
 
 .raffle-images {
@@ -306,7 +326,7 @@ body {
   background: var(--surface);
   border: 2px solid var(--border);
   border-radius: 10px;
-  padding: 10px 4px;
+  padding: 8px 4px;
   text-align: center;
   cursor: pointer;
   transition: transform 0.1s ease, box-shadow 0.1s ease;
@@ -314,10 +334,21 @@ body {
   display: flex;
   flex-direction: column;
   justify-content: center;
-  min-height: 58px;
+  align-items: center;
+  min-height: 62px;
 }
 .ticket-cell:hover { transform: translateY(-2px); box-shadow: 0 4px 10px rgba(0,0,0,0.08); }
-.ticket-num { font-weight: 800; font-size: 16px; }
+.ticket-num { font-weight: 800; font-size: 16px; line-height: 1.15; }
+.ticket-double-pill {
+  display: inline-block;
+  background: #e0e7ff;
+  color: #1e40af;
+  font-size: 11px;
+  font-weight: 800;
+  padding: 1px 6px;
+  border-radius: 6px;
+  margin: 2px 0;
+}
 .ticket-sub { font-size: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; padding: 0 3px; }
 
 .ticket-cell.disponible {
@@ -329,10 +360,18 @@ body {
   border-color: var(--warning);
   color: #92400e;
 }
+.ticket-cell.apartado .ticket-double-pill {
+  background: #fde68a;
+  color: #78350f;
+}
 .ticket-cell.vendido {
   background: #d1fae5;
   border-color: var(--accent);
   color: #065f46;
+}
+.ticket-cell.vendido .ticket-double-pill {
+  background: #a7f3d0;
+  color: #064e3b;
 }
 
 .card {
@@ -361,6 +400,14 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--primary); b
 
 .checkbox-label { display: flex !important; align-items: center; gap: 8px; cursor: pointer; }
 .checkbox-label input { width: auto; }
+
+.double-config-box {
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 10px;
+  padding: 12px;
+  margin-bottom: 12px;
+}
 
 .btn {
   display: inline-flex;
@@ -405,6 +452,7 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--primary); b
 .tag-apar { background: #fef3c7; color: #92400e; }
 .tag-vend { background: #d1fae5; color: #065f46; }
 .tag-warn { background: #fee2e2; color: #b91c1c; }
+.tag-double { background: #dbeafe; color: #1e40af; }
 
 .modal { position: fixed; inset: 0; z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 16px; }
 .modal-backdrop { position: absolute; inset: 0; background: rgba(15, 23, 42, 0.6); }
