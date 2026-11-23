@@ -1,5 +1,5 @@
 /**
- * GESTOR DE RIFAS PRO - FRONTEND SPA + PWA (v3.7)
+ * GESTOR DE RIFAS PRO - FRONTEND SPA + PWA (v3.8)
  */
 
 const DEFAULT_GAS_ENDPOINT = 'https://script.google.com/macros/s/AKfycbxP7dnnwDuABbl5LPX-vjOh6J0-J0XH3S8n7xTJNI54cNUlwzxJFUOwhJoSJBcS89v_kQ/exec';
@@ -774,6 +774,51 @@ function renderStats() {
   }).join('');
 }
 
+function renderVendorDistributionSummary() {
+  const box = document.getElementById('vendorDistributionSummary');
+  if (!box) return;
+
+  const activeVendors = (state.users || []).filter(u => u.role === 'vendedor' && u.active);
+  const vendorCount = activeVendors.length;
+  const totalTickets = Number((state.config && state.config.totalTickets) || state.tickets.length || 0);
+
+  if (vendorCount === 0 || totalTickets === 0) {
+    box.innerHTML = '';
+    return;
+  }
+
+  const countByTickets = new Map();
+  let hasAssigned = false;
+
+  activeVendors.forEach(u => {
+    const qty = Array.isArray(u.assignedTickets) ? u.assignedTickets.length : 0;
+    if (qty > 0) hasAssigned = true;
+    countByTickets.set(qty, (countByTickets.get(qty) || 0) + 1);
+  });
+
+  if (!hasAssigned) {
+    countByTickets.clear();
+    const base = Math.floor(totalTickets / vendorCount);
+    const remainder = totalTickets % vendorCount;
+    if (remainder > 0) {
+      countByTickets.set(base + 1, remainder);
+      countByTickets.set(base, vendorCount - remainder);
+    } else {
+      countByTickets.set(base, vendorCount);
+    }
+  }
+
+  const lines = Array.from(countByTickets.entries())
+    .sort((a, b) => b[0] - a[0])
+    .map(([qty, vendorsQty]) => {
+      const vLabel = vendorsQty === 1 ? 'vendedor' : 'vendedores';
+      const tLabel = qty === 1 ? 'boleto' : 'boletos';
+      return `<div>• <strong>${vendorsQty}</strong> ${vLabel} con <strong>${qty}</strong> ${tLabel}</div>`;
+    });
+
+  box.innerHTML = lines.join('');
+}
+
 function renderUsersAndAssignments() {
   document.getElementById('cfgDistModeQuick').value = state.config.distributionMode || 'A';
 
@@ -802,6 +847,8 @@ function renderUsersAndAssignments() {
       </tr>
     `;
   }).join('');
+
+  renderVendorDistributionSummary();
 }
 
 window.deleteUserById = async function(userId, username) {
