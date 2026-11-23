@@ -245,9 +245,10 @@
             </div>
             <hr />
             <h4>Asignación Automática Equitativa</h4>
+            <p class="alert-warning mt-8">Solo se asigna una vez por vendedor. Quienes ya tengan boletos asignados no volverán a recibir más.</p>
             <div class="form-row">
               <div class="form-group">
-                <label>Boletos por vendedor activo</label>
+                <label>Boletos por vendedor activo sin asignar</label>
                 <input type="number" id="autoAssignCount" min="1" value="10" />
               </div>
               <div class="form-group">
@@ -263,10 +264,11 @@
               <button type="button" id="btnClearAssign" class="btn btn-danger-outline">Limpiar Asignaciones</button>
             </div>
             <hr />
-            <h4>Asignación Manual por Vendedor</h4>
+            <h4>Asignación Manual por Vendedor (1 sola vez)</h4>
             <div class="form-group">
               <label>Seleccionar Vendedor</label>
               <select id="manualAssignVendor"></select>
+              <small id="manualVendorWarning" style="color:var(--danger); font-weight:600; display:block; margin-top:4px;"></small>
             </div>
             <div class="form-group">
               <label>Números o rangos (ej: 1-10, 25, 30-35)</label>
