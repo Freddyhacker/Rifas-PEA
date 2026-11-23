@@ -1,4 +1,4 @@
-const CACHE_NAME = 'rifas-pwa-v1';
+const CACHE_NAME = 'rifas-pwa-v2';
 const STATIC_ASSETS = [
   './',
   './index.html',
@@ -26,17 +26,22 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('fetch', (event) => {
   const url = event.request.url;
-  if (event.request.method !== 'GET' || url.includes('script.google.com')) {
+  if (event.request.method !== 'GET' || url.includes('script.google.com') || url.includes('googleusercontent.com')) {
     return;
   }
 
   event.respondWith(
-    fetch(event.request)
-      .then((response) => {
-        const clone = response.clone();
-        caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
-        return response;
-      })
-      .catch(() => caches.match(event.request))
+    caches.match(event.request).then((cached) => {
+      const networkFetch = fetch(event.request)
+        .then((response) => {
+          if (response && response.status === 200) {
+            const clone = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+          }
+          return response;
+        })
+        .catch(() => cached);
+      return cached || networkFetch;
+    })
   );
 });
