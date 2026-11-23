@@ -1,8 +1,8 @@
 /**
- * GESTOR DE RIFAS PRO - FRONTEND SPA + PWA (v3.3)
+ * GESTOR DE RIFAS PRO - FRONTEND SPA + PWA (v3.6)
  */
 
-const DEFAULT_GAS_ENDPOINT = 'https://script.google.com/macros/s/AKfycbwOtmUVlM3mcEiPa2BmNP3Q9yDqwUVN_-GsvqWnMmQmVZyhkkVfLygVuL_-HrYM-FnhpA/exec';
+const DEFAULT_GAS_ENDPOINT = 'https://script.google.com/macros/s/REEMPLAZA_CON_TU_ID/exec';
 const SNAPSHOT_KEY = 'rifas_last_snapshot_v1';
 
 const state = {
@@ -29,19 +29,23 @@ document.addEventListener('DOMContentLoaded', () => {
     localStorage.setItem('rifas_gas_url', DEFAULT_GAS_ENDPOINT);
   }
 
+  const cfgForm = document.getElementById('configForm');
+  if (cfgForm) {
+    cfgForm.noValidate = true;
+    cfgForm.querySelectorAll('[required]').forEach(el => el.removeAttribute('required'));
+  }
+
   registerServiceWorker();
   bindEvents();
   updateOnlineStatus();
 
   if (state.token) {
-    // Abrir de inmediato con la última copia guardada localmente para no esperar 5-10s
     const loadedCache = loadLocalSnapshot();
     showAppShell();
     if (loadedCache) {
       applyVisualTheme();
       renderAll(true);
     }
-    // Sincronizar cambios recientes en segundo plano
     syncData(false);
   } else {
     showLoginView();
@@ -305,18 +309,18 @@ function applyVisualTheme() {
   if (!cfg) return;
 
   const root = document.documentElement;
-  root.style.setProperty('--primary', cfg.primaryColor || '#2563eb');
-  root.style.setProperty('--accent', cfg.accentColor || '#10b981');
   root.style.setProperty('--cols-desktop', cfg.gridColsDesktop || 10);
   root.style.setProperty('--cols-mobile', cfg.gridColsMobile || 5);
-  root.style.setProperty('--header-font', (cfg.headerFontSize || 28) + 'px');
-  root.style.setProperty('--body-font', (cfg.bodyFontSize || 15) + 'px');
+  root.style.setProperty('--header-font', (cfg.headerFontSize || 26) + 'px');
+  root.style.setProperty('--body-font', (cfg.bodyFontSize || 14) + 'px');
 
   const headerCard = document.getElementById('raffleHeaderCard');
-  headerCard.style.paddingTop = (cfg.headerPadTop ?? 24) + 'px';
-  headerCard.style.paddingBottom = (cfg.headerPadBottom ?? 24) + 'px';
-  headerCard.style.paddingLeft = (cfg.headerPadLeft ?? 20) + 'px';
-  headerCard.style.paddingRight = (cfg.headerPadRight ?? 20) + 'px';
+  if (headerCard) {
+    headerCard.style.paddingTop = (cfg.headerPadTop ?? 0) + 'px';
+    headerCard.style.paddingBottom = (cfg.headerPadBottom ?? 0) + 'px';
+    headerCard.style.paddingLeft = (cfg.headerPadLeft ?? 0) + 'px';
+    headerCard.style.paddingRight = (cfg.headerPadRight ?? 0) + 'px';
+  }
 }
 
 function renderAll(forceFormRefresh = false) {
@@ -346,18 +350,39 @@ function renderAll(forceFormRefresh = false) {
 }
 
 function renderRaffleHeader() {
-  const cfg = state.config;
-  document.getElementById('displayTitle').textContent = cfg.title;
-  document.getElementById('displaySubtitle').textContent = cfg.subtitle;
-  document.getElementById('displayPromo').textContent = cfg.promoText || `$${cfg.ticketPrice} por boleto`;
-  document.getElementById('displayPrizes').textContent = cfg.prizesText;
-  document.getElementById('displayReason').textContent = cfg.reasonText;
-  document.getElementById('displayDate').textContent = cfg.eventDate;
-  document.getElementById('displayAnnouncement').textContent = cfg.announcementMethod;
-  document.getElementById('displayWinnerMethod').textContent = cfg.winnerMethod;
+  const cfg = state.config || {};
+  document.getElementById('displayTitle').textContent = cfg.title || 'GRAN RIFA ESPECIAL';
+  document.getElementById('displaySubtitle').textContent = cfg.subtitle || '¡Participa y gana increíbles premios!';
 
-  const doubleBadge = document.getElementById('displayDoubleBadge');
-  doubleBadge.classList.toggle('hidden', !cfg.doubleChance);
+  const promoDoubleEl = document.getElementById('displayPromoDouble');
+  const promoTicketsEl = document.getElementById('displayPromoTickets');
+  if (cfg.promoText && cfg.promoText.includes('|')) {
+    const parts = cfg.promoText.split('|').map(s => s.trim()).filter(Boolean);
+    if (parts[0]) promoDoubleEl.textContent = parts[0];
+    if (parts[1]) promoTicketsEl.textContent = parts[1];
+  } else if (cfg.promoText) {
+    promoDoubleEl.textContent = cfg.promoText;
+    promoTicketsEl.textContent = '2 números por boleto.';
+  }
+
+  const firstEl = document.getElementById('displayFirstPrize');
+  const secondEl = document.getElementById('displaySecondPrize');
+  const prizesRaw = String(cfg.prizesText || '').trim();
+  if (prizesRaw) {
+    const lines = prizesRaw.split(/\n|\|/).map(s => s.trim()).filter(Boolean);
+    if (lines.length >= 2) {
+      firstEl.textContent = lines[0].replace(/^(🥇\s*)?(PRIMER\s*LUGAR\s*:?\s*)/i, '') || 'Premio a elegir.';
+      secondEl.textContent = lines[1].replace(/^(🥈\s*)?(SEGUNDO\s*LUGAR\s*:?\s*)/i, '') || '$5,000.';
+    } else {
+      firstEl.textContent = lines[0] || 'Premio a elegir.';
+      secondEl.textContent = '$5,000.';
+    }
+  }
+
+  document.getElementById('displayReason').textContent = cfg.reasonText || 'Equipo Evangelismo.';
+  document.getElementById('displayDate').textContent = cfg.eventDate || 'Por confirmar.';
+  document.getElementById('displayAnnouncement').textContent = cfg.announcementMethod || 'Redes sociales.';
+  document.getElementById('displayWinnerMethod').textContent = cfg.winnerMethod || 'Últimos 3 dígitos de la Lotería Nacional.';
 
   const imgBox = document.getElementById('displayImages');
   imgBox.innerHTML = '';
@@ -525,7 +550,7 @@ function renderAdminTable() {
   state.users.forEach(u => {
     const opt = document.createElement('option');
     opt.value = u.username;
-    opt.textContent = u.username;
+    opt.textContent = u.username + (!u.active ? ' (Cerrado)' : '');
     vendorSelect.appendChild(opt);
   });
   vendorSelect.value = currentVendorFilter;
@@ -620,7 +645,7 @@ function exportToExcel() {
   const ws = XLSX.utils.json_to_sheet(dataRows);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Boletos');
-  XLSX.writeFile(wb, `Rifa_${state.config.title.replace(/\s+/g, '_')}_${new Date().toISOString().slice(0,10)}.xlsx`);
+  XLSX.writeFile(wb, `Rifa_${(state.config.title || 'Rifa').replace(/\s+/g, '_')}_${new Date().toISOString().slice(0,10)}.xlsx`);
 }
 
 function renderStats() {
@@ -632,43 +657,59 @@ function renderStats() {
 
   const recaudado = vend * price;
   const pendienteDinero = apar * price;
-  const pct = total > 0 ? Math.round(((vend + apar) / total) * 100) : 0;
+  const proyeccionTotal = total * price;
+  const pctVendidos = total > 0 ? Math.round((vend / total) * 100) : 0;
+  const pctOcupados = total > 0 ? Math.round(((vend + apar) / total) * 100) : 0;
 
   document.getElementById('kpiGrid').innerHTML = `
     <div class="kpi-card"><span>Total de Boletos</span><strong>${total}${state.config.doubleChance ? ` (${total * 2} núms)` : ''}</strong></div>
-    <div class="kpi-card"><span>Disponibles</span><strong>${disp}</strong></div>
-    <div class="kpi-card"><span>Apartados (Pendientes)</span><strong>${apar}</strong></div>
-    <div class="kpi-card"><span>Vendidos (Pagados)</span><strong>${vend}</strong></div>
-    <div class="kpi-card"><span>Dinero Recaudado</span><strong style="color:var(--accent)">$${recaudado.toLocaleString()}</strong></div>
+    <div class="kpi-card"><span>Disponibles</span><strong>${disp} <small style="font-size:13px;color:var(--muted)">(${total > 0 ? Math.round((disp/total)*100) : 0}%)</small></strong></div>
+    <div class="kpi-card"><span>Apartados (Pendientes)</span><strong>${apar} <small style="font-size:13px;color:var(--muted)">(${total > 0 ? Math.round((apar/total)*100) : 0}%)</small></strong></div>
+    <div class="kpi-card"><span>Vendidos (Pagados)</span><strong>${vend} <small style="font-size:13px;color:var(--muted)">(${pctVendidos}%)</small></strong></div>
+    <div class="kpi-card"><span>Dinero Recaudado</span><strong style="color:#059669">$${recaudado.toLocaleString()}</strong></div>
     <div class="kpi-card"><span>Pendiente por Cobrar</span><strong style="color:var(--warning)">$${pendienteDinero.toLocaleString()}</strong></div>
+    <div class="kpi-card"><span>Proyección Máxima</span><strong>$${proyeccionTotal.toLocaleString()}</strong></div>
+    <div class="kpi-card"><span>Avance Total</span><strong>${pctOcupados}%</strong></div>
   `;
 
   const bar = document.getElementById('raffleProgressBar');
-  bar.style.width = pct + '%';
-  bar.textContent = `${pct}% (${vend + apar} de ${total} boletos ocupados)`;
+  bar.style.width = pctOcupados + '%';
+  bar.textContent = `${pctOcupados}% ocupado (${vend} pagados, ${apar} apartados, ${disp} libres de ${total})`;
 
   const vendorMap = {};
   state.users.forEach(u => {
-    vendorMap[u.username] = { username: u.username, asignados: u.assignedTickets.length, pagados: 0, apartados: 0 };
+    vendorMap[u.username] = {
+      username: u.username,
+      active: u.active,
+      asignados: Array.isArray(u.assignedTickets) ? u.assignedTickets.length : 0,
+      pagados: 0,
+      apartados: 0
+    };
   });
 
   state.tickets.forEach(t => {
     const owner = t.vendedorRegistro || t.vendedorAsignado;
     if (!owner) return;
-    if (!vendorMap[owner]) vendorMap[owner] = { username: owner, asignados: 0, pagados: 0, apartados: 0 };
+    if (!vendorMap[owner]) {
+      vendorMap[owner] = { username: owner, active: false, asignados: 0, pagados: 0, apartados: 0 };
+    }
     if (t.estado === 'vendido') vendorMap[owner].pagados++;
     if (t.estado === 'apartado') vendorMap[owner].apartados++;
   });
 
   document.getElementById('vendorStatsBody').innerHTML = Object.values(vendorMap).map(v => {
     const libres = Math.max(0, v.asignados - v.pagados - v.apartados);
+    const totalVendedor = v.pagados + v.apartados;
+    const efectividad = v.asignados > 0 ? Math.round((totalVendedor / v.asignados) * 100) : 0;
+    const estadoBadge = v.active ? '' : ' <span class="tag tag-warn">Cerrado</span>';
+
     return `
       <tr>
-        <td><strong>${escapeHtml(v.username)}</strong></td>
+        <td><strong>${escapeHtml(v.username)}</strong>${estadoBadge}</td>
         <td>${v.asignados}</td>
         <td>${v.pagados}</td>
         <td>${v.apartados}</td>
-        <td>${libres}</td>
+        <td>${libres} (${efectividad}% mov.)</td>
         <td><strong>$${(v.pagados * price).toLocaleString()}</strong></td>
         <td>$${(v.apartados * price).toLocaleString()}</td>
       </tr>
@@ -701,7 +742,8 @@ function renderUsersAndAssignments() {
     const opt = document.createElement('option');
     opt.value = u.id;
     const lockedTag = u.assignedTickets.length > 0 ? ' [Ya asignado]' : '';
-    opt.textContent = `${u.username} (${u.assignedTickets.length} asignados)${lockedTag}`;
+    const statusTag = !u.active ? ' (Cerrado)' : '';
+    opt.textContent = `${u.username}${statusTag} (${u.assignedTickets.length} asignados)${lockedTag}`;
     manualSel.appendChild(opt);
   });
   if (currentManual && Array.from(manualSel.options).some(o => o.value === currentManual)) {
@@ -715,11 +757,15 @@ function renderUsersAndAssignments() {
       ? ''
       : `<button class="btn btn-sm btn-danger-outline" onclick="deleteUserById('${u.id}', '${escapeHtml(u.username)}')">Eliminar</button>`;
 
+    const statusLabel = u.active
+      ? '<span class="tag tag-vend">Activo</span>'
+      : '<span class="tag tag-warn">Cerrado / Inactivo</span>';
+
     return `
       <tr>
         <td><strong>${escapeHtml(u.username)}</strong></td>
         <td>${u.role.toUpperCase()}</td>
-        <td>${u.active ? '<span class="tag tag-vend">Activo</span>' : '<span class="tag tag-warn">Desactivado</span>'}</td>
+        <td>${statusLabel}</td>
         <td>${u.assignedTickets.length > 0 ? u.assignedTickets.join(', ') : 'Ninguno'}</td>
         <td>
           <div class="btn-row">
@@ -804,29 +850,29 @@ function populateConfigForm() {
   const c = state.config;
   document.getElementById('cfgTitle').value = c.title || '';
   document.getElementById('cfgSubtitle').value = c.subtitle || '';
-  document.getElementById('cfgTotalTickets').value = c.totalTickets || 100;
-  document.getElementById('cfgTicketPrice').value = c.ticketPrice || 50;
+  document.getElementById('cfgTotalTickets').value = c.totalTickets ?? 100;
+  document.getElementById('cfgTicketPrice').value = c.ticketPrice ?? 50;
   document.getElementById('cfgDoubleChance').checked = Boolean(c.doubleChance);
   document.getElementById('btnRegenerateDouble').classList.toggle('hidden', !c.doubleChance);
   document.getElementById('cfgPromoText').value = c.promoText || '';
   document.getElementById('cfgPrizesText').value = c.prizesText || '';
   document.getElementById('cfgReasonText').value = c.reasonText || '';
   document.getElementById('cfgEventDate').value = c.eventDate || '';
-  document.getElementById('cfgReservationHours').value = c.reservationHours || 24;
+  document.getElementById('cfgReservationHours').value = c.reservationHours ?? 24;
   document.getElementById('cfgAnnouncementMethod').value = c.announcementMethod || '';
   document.getElementById('cfgWinnerMethod').value = c.winnerMethod || '';
   document.getElementById('cfgAutoReleaseExpired').checked = Boolean(c.autoReleaseExpired);
 
-  document.getElementById('cfgColsDesktop').value = c.gridColsDesktop || 10;
-  document.getElementById('cfgColsMobile').value = c.gridColsMobile || 5;
-  document.getElementById('cfgPrimaryColor').value = c.primaryColor || '#2563eb';
-  document.getElementById('cfgAccentColor').value = c.accentColor || '#10b981';
-  document.getElementById('cfgHeaderFontSize').value = c.headerFontSize || 28;
-  document.getElementById('cfgBodyFontSize').value = c.bodyFontSize || 15;
-  document.getElementById('cfgPadTop').value = c.headerPadTop ?? 24;
-  document.getElementById('cfgPadBottom').value = c.headerPadBottom ?? 24;
-  document.getElementById('cfgPadLeft').value = c.headerPadLeft ?? 20;
-  document.getElementById('cfgPadRight').value = c.headerPadRight ?? 20;
+  document.getElementById('cfgColsDesktop').value = c.gridColsDesktop ?? 10;
+  document.getElementById('cfgColsMobile').value = c.gridColsMobile ?? 5;
+  document.getElementById('cfgPrimaryColor').value = c.primaryColor || '#102442';
+  document.getElementById('cfgAccentColor').value = c.accentColor || '#0B1730';
+  document.getElementById('cfgHeaderFontSize').value = c.headerFontSize ?? 26;
+  document.getElementById('cfgBodyFontSize').value = c.bodyFontSize ?? 14;
+  document.getElementById('cfgPadTop').value = c.headerPadTop ?? 0;
+  document.getElementById('cfgPadBottom').value = c.headerPadBottom ?? 0;
+  document.getElementById('cfgPadLeft').value = c.headerPadLeft ?? 0;
+  document.getElementById('cfgPadRight').value = c.headerPadRight ?? 0;
 
   state.tempConfigImages = [...(c.images || [])];
   state.configDirty = false;
@@ -872,6 +918,19 @@ function handlePrizeImageUpload(e) {
   });
 }
 
+// Guardado limpio por campo: conserva el valor previo de state.config si un campo está vacío o no se modificó
+function readFieldClean(id, fallbackValue, isNumber = false) {
+  const el = document.getElementById(id);
+  if (!el) return fallbackValue;
+  const raw = el.value;
+  if (isNumber) {
+    if (raw === '' || raw === null || raw === undefined) return fallbackValue;
+    const parsed = Number(raw);
+    return Number.isNaN(parsed) ? fallbackValue : parsed;
+  }
+  return raw === '' ? (fallbackValue ?? '') : raw;
+}
+
 async function handleSaveConfigSubmit(e, regenerateDoubleMap = false) {
   if (e) e.preventDefault();
   const btn = document.getElementById('btnSaveConfig');
@@ -879,42 +938,50 @@ async function handleSaveConfigSubmit(e, regenerateDoubleMap = false) {
   btn.textContent = 'Guardando configuración...';
 
   try {
-    const totalVal = Number(document.getElementById('cfgTotalTickets').value);
-    const doubleVal = document.getElementById('cfgDoubleChance').checked;
+    const cur = state.config || {};
+    const totalVal = readFieldClean('cfgTotalTickets', Number(cur.totalTickets) || 100, true);
+    const priceVal = readFieldClean('cfgTicketPrice', Number(cur.ticketPrice) || 50, true);
+    const doubleEl = document.getElementById('cfgDoubleChance');
+    const doubleVal = doubleEl ? Boolean(doubleEl.checked) : Boolean(cur.doubleChance);
+
     const localMap = doubleVal
-      ? ((regenerateDoubleMap || !state.config.doubleMap || Object.keys(state.config.doubleMap).length !== totalVal)
+      ? ((regenerateDoubleMap || !cur.doubleMap || Object.keys(cur.doubleMap).length !== totalVal)
         ? buildFallbackDoubleMap(totalVal)
-        : state.config.doubleMap)
+        : cur.doubleMap)
       : {};
 
-    const res = await apiCall('updateConfig', {
-      title: document.getElementById('cfgTitle').value,
-      subtitle: document.getElementById('cfgSubtitle').value,
+    const payload = {
+      title: readFieldClean('cfgTitle', cur.title || 'GRAN RIFA ESPECIAL', false),
+      subtitle: readFieldClean('cfgSubtitle', cur.subtitle || '¡Participa y gana increíbles premios!', false),
       totalTickets: totalVal,
-      ticketPrice: Number(document.getElementById('cfgTicketPrice').value),
+      ticketPrice: priceVal,
       doubleChance: doubleVal,
       doubleMap: localMap,
       regenerateDoubleMap: regenerateDoubleMap,
-      promoText: document.getElementById('cfgPromoText').value,
-      prizesText: document.getElementById('cfgPrizesText').value,
-      reasonText: document.getElementById('cfgReasonText').value,
-      eventDate: document.getElementById('cfgEventDate').value,
-      reservationHours: Number(document.getElementById('cfgReservationHours').value),
-      announcementMethod: document.getElementById('cfgAnnouncementMethod').value,
-      winnerMethod: document.getElementById('cfgWinnerMethod').value,
-      autoReleaseExpired: document.getElementById('cfgAutoReleaseExpired').checked,
-      gridColsDesktop: Number(document.getElementById('cfgColsDesktop').value),
-      gridColsMobile: Number(document.getElementById('cfgColsMobile').value),
-      primaryColor: document.getElementById('cfgPrimaryColor').value,
-      accentColor: document.getElementById('cfgAccentColor').value,
-      headerFontSize: Number(document.getElementById('cfgHeaderFontSize').value),
-      bodyFontSize: Number(document.getElementById('cfgBodyFontSize').value),
-      headerPadTop: Number(document.getElementById('cfgPadTop').value),
-      headerPadBottom: Number(document.getElementById('cfgPadBottom').value),
-      headerPadLeft: Number(document.getElementById('cfgPadLeft').value),
-      headerPadRight: Number(document.getElementById('cfgPadRight').value),
+      promoText: readFieldClean('cfgPromoText', cur.promoText || '', false),
+      prizesText: readFieldClean('cfgPrizesText', cur.prizesText || '', false),
+      reasonText: readFieldClean('cfgReasonText', cur.reasonText || '', false),
+      eventDate: readFieldClean('cfgEventDate', cur.eventDate || '', false),
+      reservationHours: readFieldClean('cfgReservationHours', Number(cur.reservationHours) || 24, true),
+      announcementMethod: readFieldClean('cfgAnnouncementMethod', cur.announcementMethod || '', false),
+      winnerMethod: readFieldClean('cfgWinnerMethod', cur.winnerMethod || '', false),
+      autoReleaseExpired: document.getElementById('cfgAutoReleaseExpired')
+        ? Boolean(document.getElementById('cfgAutoReleaseExpired').checked)
+        : Boolean(cur.autoReleaseExpired),
+      gridColsDesktop: readFieldClean('cfgColsDesktop', Number(cur.gridColsDesktop) || 10, true),
+      gridColsMobile: readFieldClean('cfgColsMobile', Number(cur.gridColsMobile) || 5, true),
+      primaryColor: readFieldClean('cfgPrimaryColor', cur.primaryColor || '#102442', false),
+      accentColor: readFieldClean('cfgAccentColor', cur.accentColor || '#0B1730', false),
+      headerFontSize: readFieldClean('cfgHeaderFontSize', Number(cur.headerFontSize) || 26, true),
+      bodyFontSize: readFieldClean('cfgBodyFontSize', Number(cur.bodyFontSize) || 14, true),
+      headerPadTop: readFieldClean('cfgPadTop', Number(cur.headerPadTop ?? 0), true),
+      headerPadBottom: readFieldClean('cfgPadBottom', Number(cur.headerPadBottom ?? 0), true),
+      headerPadLeft: readFieldClean('cfgPadLeft', Number(cur.headerPadLeft ?? 0), true),
+      headerPadRight: readFieldClean('cfgPadRight', Number(cur.headerPadRight ?? 0), true),
       images: state.tempConfigImages
-    });
+    };
+
+    const res = await apiCall('updateConfig', payload);
     state.configDirty = false;
     showToast(res.message, 'success');
     await syncData(true);
@@ -927,12 +994,18 @@ async function handleSaveConfigSubmit(e, regenerateDoubleMap = false) {
 }
 
 function renderHistory() {
-  document.getElementById('historyTableBody').innerHTML = state.history.map(h => `
+  const salesOnly = (state.history || []).filter(h => {
+    const acc = String(h.accion || '').toUpperCase();
+    const det = String(h.detalle || '').toLowerCase();
+    return acc.includes('VENTA') || acc.includes('VENDIDO') || det.includes(' - pagado');
+  });
+
+  document.getElementById('historyTableBody').innerHTML = salesOnly.map(h => `
     <tr>
       <td>${formatDate(h.fecha)}</td>
       <td><strong>${escapeHtml(h.usuario)}</strong></td>
       <td>${escapeHtml(h.rol)}</td>
-      <td><span class="tag tag-disp">${escapeHtml(h.accion)}</span></td>
+      <td><span class="tag tag-vend">${escapeHtml(h.accion)}</span></td>
       <td>${escapeHtml(String(h.boleto))}</td>
       <td>${escapeHtml(h.detalle)}</td>
     </tr>
