@@ -326,7 +326,7 @@ body {
   background: var(--surface);
   border: 2px solid var(--border);
   border-radius: 10px;
-  padding: 8px 4px;
+  padding: 8px 6px;
   text-align: center;
   cursor: pointer;
   transition: transform 0.1s ease, box-shadow 0.1s ease;
@@ -335,20 +335,32 @@ body {
   flex-direction: column;
   justify-content: center;
   align-items: center;
-  min-height: 62px;
+  gap: 3px;
+  min-height: 60px;
 }
 .ticket-cell:hover { transform: translateY(-2px); box-shadow: 0 4px 10px rgba(0,0,0,0.08); }
-.ticket-num { font-weight: 800; font-size: 16px; line-height: 1.15; }
+
+.ticket-pair-row {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.ticket-num { font-weight: 800; font-size: 15px; line-height: 1.1; }
+
 .ticket-double-pill {
   display: inline-block;
   background: #e0e7ff;
   color: #1e40af;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 800;
   padding: 1px 6px;
   border-radius: 6px;
-  margin: 2px 0;
+  line-height: 1.2;
 }
+
 .ticket-sub { font-size: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; padding: 0 3px; }
 
 .ticket-cell.disponible {
@@ -446,6 +458,12 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--primary); b
 .data-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .data-table th, .data-table td { padding: 10px; border-bottom: 1px solid var(--border); text-align: left; }
 .data-table th { background: #f8fafc; font-weight: 700; white-space: nowrap; }
+
+.ticket-table-pair {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
 
 .tag { padding: 2px 8px; border-radius: 6px; font-size: 11px; font-weight: 700; }
 .tag-disp { background: #e2e8f0; color: #334155; }
