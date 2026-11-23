@@ -74,20 +74,38 @@
     <main class="main-content">
       <section id="tabBoletos" class="tab-panel active">
         <div id="raffleHeaderCard" class="raffle-header-card">
-          <div class="raffle-header-grid">
-            <div class="raffle-info">
-              <h1 id="displayTitle">Cargando rifa...</h1>
-              <p id="displaySubtitle" class="subtitle"></p>
-              <div class="promo-pill" id="displayPromo"></div>
-              <div class="raffle-meta-grid">
-                <div><strong>🏆 Premios:</strong> <span id="displayPrizes"></span></div>
-                <div><strong>🎯 Motivo:</strong> <span id="displayReason"></span></div>
-                <div><strong>📅 Fecha:</strong> <span id="displayDate"></span></div>
-                <div><strong>📢 Anuncio:</strong> <span id="displayAnnouncement"></span></div>
-                <div><strong>🎲 Selección:</strong> <span id="displayWinnerMethod"></span></div>
+          <div class="raffle-hero">
+            <div class="raffle-hero-top">
+              <div class="raffle-title-block">
+                <h1 id="displayTitle">Cargando rifa...</h1>
+                <p id="displaySubtitle" class="subtitle"></p>
+                <div class="price-banner" id="displayPromo"></div>
+              </div>
+              <div id="displayImages" class="raffle-images"></div>
+            </div>
+
+            <div class="raffle-details-grid">
+              <div class="detail-box">
+                <span class="detail-box-label">🏆 Premios</span>
+                <span class="detail-box-value" id="displayPrizes"></span>
+              </div>
+              <div class="detail-box">
+                <span class="detail-box-label">🎯 Motivo</span>
+                <span class="detail-box-value" id="displayReason"></span>
+              </div>
+              <div class="detail-box">
+                <span class="detail-box-label">📅 Fecha del Sorteo</span>
+                <span class="detail-box-value" id="displayDate"></span>
+              </div>
+              <div class="detail-box">
+                <span class="detail-box-label">📢 Medio de Anuncio</span>
+                <span class="detail-box-value" id="displayAnnouncement"></span>
+              </div>
+              <div class="detail-box">
+                <span class="detail-box-label">🎲 Selección del Ganador</span>
+                <span class="detail-box-value" id="displayWinnerMethod"></span>
               </div>
             </div>
-            <div id="displayImages" class="raffle-images"></div>
           </div>
 
           <div id="winnerBanner" class="winner-banner hidden"></div>
@@ -124,7 +142,7 @@
               <option value="disponible">Disponible</option>
               <option value="apartado">Apartado (Pendiente)</option>
               <option value="vendido">Vendido (Pagado)</option>
-              <option value="expiring">Apartados próximos a vencer (&lt; 3h)</option>
+              <option value="expiring">Apartados próximos a vencer (menos de 3h)</option>
             </select>
           </div>
           <div class="table-responsive">
@@ -401,7 +419,7 @@
           </div>
 
           <div class="mt-16">
-            <button type="submit" class="btn btn-primary btn-lg">💾 Guardar Toda la Configuración</button>
+            <button type="submit" id="btnSaveConfig" class="btn btn-primary btn-lg">💾 Guardar Toda la Configuración</button>
           </div>
         </form>
       </section>
