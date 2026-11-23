@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#2563eb" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>Gestor de Rifas Pro</title>
+  <link rel="manifest" href="./manifest.json" />
+  <link rel="icon" type="image/svg+xml" href="./icon.svg" />
+  <link rel="apple-touch-icon" href="./icon.svg" />
+  <link rel="stylesheet" href="./styles.css" />
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js" defer></script>
+</head>
+<body>
+  <div id="offlineBanner" class="offline-banner hidden">
+    Sin conexión a internet. Se requiere conexión para registrar o modificar boletos.
+  </div>
+
+  <div id="toastContainer" class="toast-container"></div>
+
+  <section id="loginView" class="login-wrapper">
+    <div class="login-card">
+      <div class="login-logo">
+        <img src="./icon.svg" alt="Logo" width="56" height="56" />
+        <h1>Gestor de Rifas</h1>
+        <p>Acceso seguro al sistema de administración y ventas</p>
+      </div>
+      <form id="loginForm">
+        <div class="form-group">
+          <label for="loginUsername">Usuario</label>
+          <input type="text" id="loginUsername" autocomplete="username" required placeholder="Ej. admin" />
+        </div>
+        <div class="form-group">
+          <label for="loginPassword">Contraseña</label>
+          <input type="password" id="loginPassword" autocomplete="current-password" required placeholder="••••••••" />
+        </div>
+        <button type="submit" id="loginBtn" class="btn btn-primary btn-block">Iniciar Sesión</button>
+      </form>
+      <div class="login-footer">
+        <button type="button" id="btnConfigEndpoint" class="btn-link">Configurar URL del Servidor (GAS)</button>
+      </div>
+    </div>
+  </section>
+
+  <div id="appView" class="app-shell hidden">
+    <header class="topbar">
+      <div class="topbar-left">
+        <img src="./icon.svg" alt="Logo" width="32" height="32" />
+        <div>
+          <strong id="topbarUser">Usuario</strong>
+          <span id="topbarRole" class="badge">Rol</span>
+        </div>
+      </div>
+      <div class="topbar-right">
+        <span id="syncIndicator" class="sync-dot" title="Sincronizado">● En línea</span>
+        <button type="button" id="btnManualSync" class="btn btn-sm btn-ghost" title="Sincronizar ahora">↻</button>
+        <button type="button" id="btnInstallPwa" class="btn btn-sm btn-accent hidden">Instalar App</button>
+        <button type="button" id="btnLogout" class="btn btn-sm btn-danger-outline">Salir</button>
+      </div>
+    </header>
+
+    <nav id="mainNav" class="nav-tabs">
+      <button class="nav-tab active" data-tab="tabBoletos">🎟️ Boletos</button>
+      <button class="nav-tab admin-only hidden" data-tab="tabAdminTabla">📋 Tabla General</button>
+      <button class="nav-tab admin-only hidden" data-tab="tabStats">📊 Estadísticas</button>
+      <button class="nav-tab admin-only hidden" data-tab="tabUsers">👥 Vendedores</button>
+      <button class="nav-tab admin-only hidden" data-tab="tabConfig">⚙️ Diseño y Rifa</button>
+      <button class="nav-tab admin-only hidden" data-tab="tabHistory">🕒 Historial</button>
+      <button class="nav-tab admin-only hidden" data-tab="tabTools">🧰 Herramientas</button>
+    </nav>
+
+    <main class="main-content">
+      <section id="tabBoletos" class="tab-panel active">
+        <div id="raffleHeaderCard" class="raffle-header-card">
+          <div class="raffle-header-grid">
+            <div class="raffle-info">
+              <h1 id="displayTitle">Cargando rifa...</h1>
+              <p id="displaySubtitle" class="subtitle"></p>
+              <div class="promo-pill" id="displayPromo"></div>
+              <div class="raffle-meta-grid">
+                <div><strong>🏆 Premios:</strong> <span id="displayPrizes"></span></div>
+                <div><strong>🎯 Motivo:</strong> <span id="displayReason"></span></div>
+                <div><strong>📅 Fecha:</strong> <span id="displayDate"></span></div>
+                <div><strong>📢 Anuncio:</strong> <span id="displayAnnouncement"></span></div>
+                <div><strong>🎲 Selección:</strong> <span id="displayWinnerMethod"></span></div>
+              </div>
+            </div>
+            <div id="displayImages" class="raffle-images"></div>
+          </div>
+
+          <div id="winnerBanner" class="winner-banner hidden"></div>
+        </div>
+
+        <div class="toolbar-card">
+          <div class="search-box">
+            <input type="search" id="ticketSearchInput" placeholder="Buscar por número, participante o teléfono..." />
+          </div>
+          <div class="filter-pills">
+            <button class="pill active" data-filter="all">Todos (<span id="countAll">0</span>)</button>
+            <button class="pill pill-disp" data-filter="disponible">Disponibles (<span id="countDisp">0</span>)</button>
+            <button class="pill pill-apar" data-filter="apartado">Apartados (<span id="countApar">0</span>)</button>
+            <button class="pill pill-vend" data-filter="vendido">Pagados (<span id="countVend">0</span>)</button>
+          </div>
+        </div>
+
+        <div id="ticketsGrid" class="tickets-grid"></div>
+      </section>
+
+      <section id="tabAdminTabla" class="tab-panel hidden">
+        <div class="card">
+          <div class="card-header-flex">
+            <h2>Control General de Boletos</h2>
+            <button type="button" id="btnExportExcel" class="btn btn-accent">📥 Exportar a Excel (.xlsx)</button>
+          </div>
+          <div class="filters-row">
+            <input type="search" id="adminTableSearch" placeholder="Filtrar número, nombre o teléfono..." />
+            <select id="adminFilterVendor">
+              <option value="">Todos los vendedores</option>
+            </select>
+            <select id="adminFilterStatus">
+              <option value="">Todos los estados</option>
+              <option value="disponible">Disponible</option>
+              <option value="apartado">Apartado (Pendiente)</option>
+              <option value="vendido">Vendido (Pagado)</option>
+              <option value="expiring">Apartados próximos a vencer (&lt; 3h)</option>
+            </select>
+          </div>
+          <div class="table-responsive">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Vendedor Asignado</th>
+                  <th>Registrado por</th>
+                  <th>Participante</th>
+                  <th>Teléfono</th>
+                  <th>Estado</th>
+                  <th>Pago</th>
+                  <th>Vencimiento Apartado</th>
+                  <th>Acción</th>
+                </tr>
+              </thead>
+              <tbody id="adminTicketsTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section id="tabStats" class="tab-panel hidden">
+        <div class="kpi-grid" id="kpiGrid"></div>
+        <div class="card mt-16">
+          <h3>Avance de la Rifa</h3>
+          <div class="progress-bar-wrap">
+            <div id="raffleProgressBar" class="progress-bar-fill" style="width: 0%">0%</div>
+          </div>
+        </div>
+        <div class="card mt-16">
+          <h3>Rendimiento por Vendedor</h3>
+          <div class="table-responsive">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Vendedor</th>
+                  <th>Asignados</th>
+                  <th>Pagados</th>
+                  <th>Apartados</th>
+                  <th>Disponibles</th>
+                  <th>Recaudado</th>
+                  <th>Por Cobrar</th>
+                </tr>
+              </thead>
+              <tbody id="vendorStatsBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section id="tabUsers" class="tab-panel hidden">
+        <div class="grid-2-col">
+          <div class="card">
+            <h3 id="userFormTitle">Nuevo Usuario (Vendedor / Admin)</h3>
+            <form id="userForm">
+              <input type="hidden" id="editUserId" />
+              <div class="form-group">
+                <label>Nombre de usuario</label>
+                <input type="text" id="userUsername" required placeholder="Ej. vendedor1" />
+              </div>
+              <div class="form-group">
+                <label>Contraseña <small id="pwdHint">(Mínimo 6 caracteres)</small></label>
+                <input type="password" id="userPassword" placeholder="Nueva contraseña" />
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label>Rol</label>
+                  <select id="userRole">
+                    <option value="vendedor">Vendedor</option>
+                    <option value="admin">Administrador</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label>Estado de cuenta</label>
+                  <select id="userActive">
+                    <option value="true">Activo</option>
+                    <option value="false">Desactivado</option>
+                  </select>
+                </div>
+              </div>
+              <div class="btn-row">
+                <button type="submit" class="btn btn-primary">Guardar Usuario</button>
+                <button type="button" id="btnCancelEditUser" class="btn btn-ghost hidden">Cancelar</button>
+              </div>
+            </form>
+          </div>
+
+          <div class="card">
+            <h3>Distribución de Boletos</h3>
+            <div class="form-group">
+              <label>Modalidad de acceso para vendedores</label>
+              <select id="cfgDistModeQuick">
+                <option value="A">Modalidad A: Todos ven y gestionan todos los boletos</option>
+                <option value="B">Modalidad B: Cada vendedor solo ve/gestiona sus boletos asignados</option>
+              </select>
+              <button type="button" id="btnSaveDistMode" class="btn btn-sm btn-primary mt-8">Aplicar Modalidad</button>
+            </div>
+            <hr />
+            <h4>Asignación Automática Equitativa</h4>
+            <div class="form-row">
+              <div class="form-group">
+                <label>Boletos por vendedor activo</label>
+                <input type="number" id="autoAssignCount" min="1" value="10" />
+              </div>
+              <div class="form-group">
+                <label>Orden</label>
+                <select id="autoAssignShuffle">
+                  <option value="false">Consecutivo (1, 2, 3...)</option>
+                  <option value="true">Aleatorio sin duplicados</option>
+                </select>
+              </div>
+            </div>
+            <div class="btn-row">
+              <button type="button" id="btnAutoAssign" class="btn btn-accent">Distribuir Automáticamente</button>
+              <button type="button" id="btnClearAssign" class="btn btn-danger-outline">Limpiar Asignaciones</button>
+            </div>
+            <hr />
+            <h4>Asignación Manual por Vendedor</h4>
+            <div class="form-group">
+              <label>Seleccionar Vendedor</label>
+              <select id="manualAssignVendor"></select>
+            </div>
+            <div class="form-group">
+              <label>Números o rangos (ej: 1-10, 25, 30-35)</label>
+              <input type="text" id="manualAssignInput" placeholder="1-10, 15, 20" />
+            </div>
+            <button type="button" id="btnManualAssign" class="btn btn-primary">Guardar Asignación Manual</button>
+          </div>
+        </div>
+
+        <div class="card mt-16">
+          <h3>Cuentas Registradas</h3>
+          <div class="table-responsive">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Usuario</th>
+                  <th>Rol</th>
+                  <th>Estado</th>
+                  <th>Boletos Asignados</th>
+                  <th>Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="usersTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section id="tabConfig" class="tab-panel hidden">
+        <form id="configForm" class="card">
+          <h2>Configuración de la Rifa y Apariencia</h2>
+          <div class="grid-2-col">
+            <div>
+              <h3>Datos y Plantilla de Información</h3>
+              <div class="form-group">
+                <label>Título principal de la rifa</label>
+                <input type="text" id="cfgTitle" required />
+              </div>
+              <div class="form-group">
+                <label>Subtítulo</label>
+                <input type="text" id="cfgSubtitle" />
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label>Total de boletos</label>
+                  <input type="number" id="cfgTotalTickets" min="10" max="5000" required />
+                </div>
+                <div class="form-group">
+                  <label>Precio unitario ($)</label>
+                  <input type="number" id="cfgTicketPrice" min="1" step="0.01" required />
+                </div>
+              </div>
+              <div class="form-group">
+                <label>Promociones / Paquetes (ej. 1x $50 | 3x $130)</label>
+                <input type="text" id="cfgPromoText" />
+              </div>
+              <div class="form-group">
+                <label>Premios</label>
+                <textarea id="cfgPrizesText" rows="3"></textarea>
+              </div>
+              <div class="form-group">
+                <label>Motivo de la rifa</label>
+                <input type="text" id="cfgReasonText" />
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label>Fecha del sorteo</label>
+                  <input type="text" id="cfgEventDate" placeholder="2026-12-20 20:00" />
+                </div>
+                <div class="form-group">
+                  <label>Duración de apartados (horas)</label>
+                  <input type="number" id="cfgReservationHours" min="1" max="720" />
+                </div>
+              </div>
+              <div class="form-group">
+                <label>Método de anuncio</label>
+                <input type="text" id="cfgAnnouncementMethod" />
+              </div>
+              <div class="form-group">
+                <label>Método de selección del ganador</label>
+                <input type="text" id="cfgWinnerMethod" />
+              </div>
+              <div class="form-group">
+                <label class="checkbox-label">
+                  <input type="checkbox" id="cfgAutoReleaseExpired" />
+                  Liberar automáticamente apartados vencidos
+                </label>
+              </div>
+            </div>
+
+            <div>
+              <h3>Diseño, Cuadrícula e Imágenes</h3>
+              <div class="form-row">
+                <div class="form-group">
+                  <label>Columnas en PC</label>
+                  <input type="number" id="cfgColsDesktop" min="4" max="25" />
+                </div>
+                <div class="form-group">
+                  <label>Columnas en Móvil</label>
+                  <input type="number" id="cfgColsMobile" min="3" max="10" />
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label>Color principal</label>
+                  <input type="color" id="cfgPrimaryColor" />
+                </div>
+                <div class="form-group">
+                  <label>Color secundario / pagado</label>
+                  <input type="color" id="cfgAccentColor" />
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label>Tamaño título (px)</label>
+                  <input type="number" id="cfgHeaderFontSize" min="16" max="48" />
+                </div>
+                <div class="form-group">
+                  <label>Tamaño texto (px)</label>
+                  <input type="number" id="cfgBodyFontSize" min="12" max="24" />
+                </div>
+              </div>
+
+              <h4>Márgenes internos sección superior (px)</h4>
+              <div class="grid-4-col">
+                <div class="form-group">
+                  <label>Arriba</label>
+                  <input type="number" id="cfgPadTop" min="0" max="120" />
+                </div>
+                <div class="form-group">
+                  <label>Abajo</label>
+                  <input type="number" id="cfgPadBottom" min="0" max="120" />
+                </div>
+                <div class="form-group">
+                  <label>Izquierda</label>
+                  <input type="number" id="cfgPadLeft" min="0" max="120" />
+                </div>
+                <div class="form-group">
+                  <label>Derecha</label>
+                  <input type="number" id="cfgPadRight" min="0" max="120" />
+                </div>
+              </div>
+
+              <h4>Imágenes de los premios (URLs o subir foto)</h4>
+              <div class="form-group">
+                <input type="file" id="prizeImageFile" accept="image/*" multiple />
+                <small>Las imágenes subidas se optimizan automáticamente.</small>
+              </div>
+              <div id="configImagesList" class="config-images-list"></div>
+            </div>
+          </div>
+
+          <div class="mt-16">
+            <button type="submit" class="btn btn-primary btn-lg">💾 Guardar Toda la Configuración</button>
+          </div>
+        </form>
+      </section>
+
+      <section id="tabHistory" class="tab-panel hidden">
+        <div class="card">
+          <h2>Historial de Movimientos (Auditoría Inmutable)</h2>
+          <div class="table-responsive">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Fecha y Hora</th>
+                  <th>Usuario</th>
+                  <th>Rol</th>
+                  <th>Acción</th>
+                  <th>Boleto</th>
+                  <th>Detalle</th>
+                </tr>
+              </thead>
+              <tbody id="historyTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section id="tabTools" class="tab-panel hidden">
+        <div class="grid-2-col">
+          <div class="card">
+            <h3>🏆 Selección del Ganador</h3>
+            <p>Selecciona aleatoriamente un boleto entre los participantes registrados.</p>
+            <div class="form-group">
+              <label class="checkbox-label">
+                <input type="checkbox" id="winnerOnlyPaid" checked />
+                Participan exclusivamente boletos pagados
+              </label>
+            </div>
+            <button type="button" id="btnPickWinner" class="btn btn-accent btn-lg btn-block">Elegir ganador</button>
+            <div id="winnerResultBox" class="winner-box mt-16 hidden"></div>
+          </div>
+
+          <div class="card">
+            <h3>🔄 Nueva Rifa y Respaldos</h3>
+            <p>Crea un respaldo completo o reinicia los registros conservando tu plantilla.</p>
+            <button type="button" id="btnCreateBackup" class="btn btn-primary btn-block mb-12">📦 Descargar y Guardar Respaldo Completo</button>
+            <button type="button" id="btnOpenResetModal" class="btn btn-danger btn-block">⚠️ Nueva rifa / Reiniciar rifa</button>
+          </div>
+        </div>
+
+        <div class="card mt-16">
+          <h3>Respaldos Almacenados</h3>
+          <div class="table-responsive">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Fecha</th>
+                  <th>Descripción</th>
+                  <th>Boletos</th>
+                  <th>Recaudado</th>
+                  <th>Acción</th>
+                </tr>
+              </thead>
+              <tbody id="backupsTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div id="ticketModal" class="modal hidden">
+    <div class="modal-backdrop" data-close="ticketModal"></div>
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h3>Boleto #<span id="modalTicketNumber"></span></h3>
+        <button type="button" class="modal-close" data-close="ticketModal">&times;</button>
+      </div>
+      <form id="ticketForm">
+        <input type="hidden" id="modalTicketNumInput" />
+        <div id="modalTicketMeta" class="ticket-meta-info"></div>
+        <div class="form-group">
+          <label for="modalParticipant">Nombre completo del participante *</label>
+          <input type="text" id="modalParticipant" required placeholder="Nombre y apellido" />
+        </div>
+        <div class="form-group">
+          <label for="modalPhone">Número telefónico *</label>
+          <input type="tel" id="modalPhone" required placeholder="10 dígitos" />
+        </div>
+        <div class="form-group">
+          <label for="modalPayStatus">Estado de pago</label>
+          <select id="modalPayStatus">
+            <option value="pendiente">Pendiente (Apartado)</option>
+            <option value="pagado">Pagado (Vendido)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="modalNotes">Notas opcionales</label>
+          <input type="text" id="modalNotes" placeholder="Ej. Transferencia, entrega en mano..." />
+        </div>
+        <div class="modal-footer">
+          <button type="button" id="btnReleaseTicket" class="btn btn-danger-outline hidden">Liberar Boleto</button>
+          <button type="submit" id="btnSaveTicket" class="btn btn-primary">Guardar Boleto</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="resetModal" class="modal hidden">
+    <div class="modal-backdrop" data-close="resetModal"></div>
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h3>Iniciar Nueva Rifa</h3>
+        <button type="button" class="modal-close" data-close="resetModal">&times;</button>
+      </div>
+      <form id="resetRaffleForm">
+        <p class="alert-warning">
+          Se creará automáticamente un respaldo completo de la rifa actual antes de borrar participantes, pagos e historial. Las cuentas de usuarios se conservarán.
+        </p>
+        <div class="form-group">
+          <label>Título de la nueva rifa (opcional)</label>
+          <input type="text" id="resetNewTitle" placeholder="Dejar vacío para conservar el actual" />
+        </div>
+        <div class="form-group">
+          <label>Cantidad de boletos para la nueva rifa</label>
+          <input type="number" id="resetTotalTickets" min="10" max="5000" required />
+        </div>
+        <div class="form-group">
+          <label class="checkbox-label">
+            <input type="checkbox" id="resetKeepTemplate" checked />
+            Conservar plantilla visual, colores, imágenes y textos
+          </label>
+        </div>
+        <div class="form-group">
+          <label class="checkbox-label">
+            <input type="checkbox" id="resetKeepAssignments" />
+            Conservar distribución actual de boletos por vendedor
+          </label>
+        </div>
+        <div class="form-group">
+          <label>Escribe <strong>REINICIAR</strong> para confirmar:</label>
+          <input type="text" id="resetConfirmText" required placeholder="REINICIAR" />
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-ghost" data-close="resetModal">Cancelar</button>
+          <button type="submit" class="btn btn-danger">Confirmar y Crear Nueva Rifa</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="endpointModal" class="modal hidden">
+    <div class="modal-backdrop" data-close="endpointModal"></div>
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h3>Conexión con Google Apps Script</h3>
+        <button type="button" class="modal-close" data-close="endpointModal">&times;</button>
+      </div>
+      <form id="endpointForm">
+        <div class="form-group">
+          <label>URL de la Aplicación Web (termina en /exec)</label>
+          <input type="url" id="gasUrlInput" required placeholder="https://script.google.com/macros/s/.../exec" />
+        </div>
+        <div class="modal-footer">
+          <button type="submit" class="btn btn-primary">Guardar Conexión</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="./app.js"></script>
+</body>
+</html>
