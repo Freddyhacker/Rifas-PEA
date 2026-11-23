@@ -1,5 +1,5 @@
 /**
- * GESTOR DE RIFAS PRO - FRONTEND SPA + PWA (v3.8)
+ * GESTOR DE RIFAS PRO - FRONTEND SPA + PWA (v4.0)
  */
 
 const DEFAULT_GAS_ENDPOINT = 'https://script.google.com/macros/s/AKfycbxP7dnnwDuABbl5LPX-vjOh6J0-J0XH3S8n7xTJNI54cNUlwzxJFUOwhJoSJBcS89v_kQ/exec';
@@ -51,6 +51,13 @@ document.addEventListener('DOMContentLoaded', () => {
     showLoginView();
   }
 });
+
+function formatTicketNum(num) {
+  const n = Number(num);
+  if (Number.isNaN(n)) return String(num);
+  if (n === 1000) return '000';
+  return String(Math.trunc(n)).padStart(3, '0');
+}
 
 function getTicketMultiplier(cfg = state.config) {
   if (!cfg) return 1;
@@ -447,8 +454,8 @@ function renderRaffleHeader() {
   const winnerBanner = document.getElementById('winnerBanner');
   if (cfg.winnerResult) {
     winnerBanner.classList.remove('hidden');
-    const bPrincipal = cfg.winnerResult.boletoPrincipal ? ` (Boleto #${cfg.winnerResult.boletoPrincipal})` : '';
-    winnerBanner.textContent = `🏆 NÚMERO GANADOR SELECCIONADO: #${cfg.winnerResult.numero}${bPrincipal} — ${cfg.winnerResult.participante} (${formatDate(cfg.winnerResult.selectedAt)})`;
+    const bPrincipal = cfg.winnerResult.boletoPrincipal ? ` (Boleto #${formatTicketNum(cfg.winnerResult.boletoPrincipal)})` : '';
+    winnerBanner.textContent = `🏆 NÚMERO GANADOR SELECCIONADO: #${formatTicketNum(cfg.winnerResult.numero)}${bPrincipal} — ${cfg.winnerResult.participante} (${formatDate(cfg.winnerResult.selectedAt)})`;
   } else {
     winnerBanner.classList.add('hidden');
   }
@@ -474,8 +481,8 @@ function renderTicketsGrid() {
   const filtered = state.tickets.filter(t => {
     if (state.currentFilter !== 'all' && t.estado !== state.currentFilter) return false;
     if (q) {
-      const matchNum = String(t.numero).includes(q);
-      const matchExtra = Array.isArray(t.extraNumbers) && t.extraNumbers.some(n => String(n).includes(q));
+      const matchNum = String(t.numero).includes(q) || formatTicketNum(t.numero).includes(q);
+      const matchExtra = Array.isArray(t.extraNumbers) && t.extraNumbers.some(n => String(n).includes(q) || formatTicketNum(n).includes(q));
       const matchName = (t.participante || '').toLowerCase().includes(q);
       const matchPhone = (t.telefono || '').toLowerCase().includes(q);
       return matchNum || matchExtra || matchName || matchPhone;
@@ -495,12 +502,12 @@ function renderTicketsGrid() {
 
     const extrasList = (mult > 1 && Array.isArray(ticket.extraNumbers)) ? ticket.extraNumbers : [];
     const extrasHtml = extrasList.length
-      ? extrasList.map(n => `<span class="ticket-double-pill">#${n}</span>`).join('')
+      ? extrasList.map(n => `<span class="ticket-double-pill">#${formatTicketNum(n)}</span>`).join('')
       : '';
 
     cell.innerHTML = `
       <div class="ticket-pair-row">
-        <span class="ticket-num">#${ticket.numero}</span>
+        <span class="ticket-num">#${formatTicketNum(ticket.numero)}</span>
         ${extrasHtml}
       </div>
       <span class="ticket-sub">${escapeHtml(label)}</span>
@@ -514,13 +521,13 @@ function renderTicketsGrid() {
 
 function openTicketModal(ticket) {
   const mult = getTicketMultiplier(state.config);
-  document.getElementById('modalTicketNumber').textContent = ticket.numero;
+  document.getElementById('modalTicketNumber').textContent = formatTicketNum(ticket.numero);
   document.getElementById('modalTicketNumInput').value = ticket.numero;
 
   const extrasList = (mult > 1 && Array.isArray(ticket.extraNumbers)) ? ticket.extraNumbers : [];
   const doubleModalBadge = document.getElementById('modalDoubleBadge');
   if (extrasList.length > 0) {
-    doubleModalBadge.textContent = `Extras: ${extrasList.map(n => `#${n}`).join(', ')}`;
+    doubleModalBadge.textContent = `Extras: ${extrasList.map(n => `#${formatTicketNum(n)}`).join(', ')}`;
     doubleModalBadge.classList.remove('hidden');
   } else {
     doubleModalBadge.classList.add('hidden');
@@ -534,7 +541,7 @@ function openTicketModal(ticket) {
   const metaBox = document.getElementById('modalTicketMeta');
   let metaLines = [];
   if (extrasList.length > 0) {
-    const allNums = [`#${ticket.numero}`, ...extrasList.map(n => `#${n}`)].join(', ');
+    const allNums = [`#${formatTicketNum(ticket.numero)}`, ...extrasList.map(n => `#${formatTicketNum(n)}`)].join(', ');
     metaLines.push(`Participa con los números: <strong>${allNums}</strong>`);
   }
   if (ticket.vendedorAsignado) metaLines.push(`Asignado a: <strong>${escapeHtml(ticket.vendedorAsignado)}</strong>`);
@@ -578,7 +585,7 @@ async function handleSaveTicketSubmit(e) {
 
 async function handleReleaseTicketClick() {
   const numero = Number(document.getElementById('modalTicketNumInput').value);
-  if (!confirm(`¿Seguro que deseas liberar el boleto #${numero}? Se borrarán los datos del participante.`)) {
+  if (!confirm(`¿Seguro que deseas liberar el boleto #${formatTicketNum(numero)}? Se borrarán los datos del participante.`)) {
     return;
   }
 
@@ -627,7 +634,8 @@ function renderAdminTable() {
     }
     if (q) {
       return String(t.numero).includes(q) ||
-        (Array.isArray(t.extraNumbers) && t.extraNumbers.some(n => String(n).includes(q))) ||
+        formatTicketNum(t.numero).includes(q) ||
+        (Array.isArray(t.extraNumbers) && t.extraNumbers.some(n => String(n).includes(q) || formatTicketNum(n).includes(q))) ||
         (t.participante || '').toLowerCase().includes(q) ||
         (t.telefono || '').toLowerCase().includes(q);
     }
@@ -648,8 +656,8 @@ function renderAdminTable() {
 
     const extrasList = (mult > 1 && Array.isArray(t.extraNumbers)) ? t.extraNumbers : [];
     const numDisplay = extrasList.length
-      ? `<div class="ticket-table-pair"><strong>#${t.numero}</strong>${extrasList.map(n => `<span class="tag tag-double">#${n}</span>`).join('')}</div>`
-      : `<strong>#${t.numero}</strong>`;
+      ? `<div class="ticket-table-pair"><strong>#${formatTicketNum(t.numero)}</strong>${extrasList.map(n => `<span class="tag tag-double">#${formatTicketNum(n)}</span>`).join('')}</div>`
+      : `<strong>#${formatTicketNum(t.numero)}</strong>`;
 
     return `
       <tr>
@@ -681,10 +689,10 @@ function exportToExcel() {
   const mult = getTicketMultiplier(state.config);
   const dataRows = state.tickets.map(t => {
     const row = {
-      'Número Principal': t.numero
+      'Número Principal': formatTicketNum(t.numero)
     };
     if (mult > 1) {
-      row['Números Extra'] = Array.isArray(t.extraNumbers) ? t.extraNumbers.join(', ') : '';
+      row['Números Extra'] = Array.isArray(t.extraNumbers) ? t.extraNumbers.map(formatTicketNum).join(', ') : '';
     }
     row['Estado Venta'] = t.estado.toUpperCase();
     row['Estado Pago'] = t.estado === 'disponible' ? '' : t.estadoPago.toUpperCase();
@@ -837,7 +845,7 @@ function renderUsersAndAssignments() {
         <td><strong>${escapeHtml(u.username)}</strong></td>
         <td>${u.role.toUpperCase()}</td>
         <td>${statusLabel}</td>
-        <td>${u.assignedTickets.length > 0 ? u.assignedTickets.join(', ') : 'Ninguno'}</td>
+        <td>${u.assignedTickets.length > 0 ? u.assignedTickets.map(formatTicketNum).join(', ') : 'Ninguno'}</td>
         <td>
           <div class="btn-row">
             <button class="btn btn-sm btn-ghost" onclick="editUser('${u.id}')">Editar</button>
@@ -1079,7 +1087,7 @@ function renderHistory() {
       <td><strong>${escapeHtml(h.usuario)}</strong></td>
       <td>${escapeHtml(h.rol)}</td>
       <td><span class="tag tag-vend">${escapeHtml(h.accion)}</span></td>
-      <td>${escapeHtml(String(h.boleto))}</td>
+      <td>${escapeHtml(formatTicketNum(h.boleto))}</td>
       <td>${escapeHtml(h.detalle)}</td>
     </tr>
   `).join('');
@@ -1215,14 +1223,14 @@ function bindEvents() {
       const box = document.getElementById('winnerResultBox');
       box.classList.remove('hidden');
       box.innerHTML = `
-        <h2>🎉 Número Ganador: #${w.numero}</h2>
-        ${w.boletoPrincipal ? `<p><strong>Boleto registrado:</strong> #${w.boletoPrincipal}</p>` : ''}
+        <h2>🎉 Número Ganador: #${formatTicketNum(w.numero)}</h2>
+        ${w.boletoPrincipal ? `<p><strong>Boleto registrado:</strong> #${formatTicketNum(w.boletoPrincipal)}</p>` : ''}
         <p><strong>Participante:</strong> ${escapeHtml(w.participante)}</p>
         <p><strong>Teléfono:</strong> ${escapeHtml(w.telefono)}</p>
         <p><strong>Vendedor:</strong> ${escapeHtml(w.vendedor)}</p>
         <small>${formatDate(w.selectedAt)}</small>
       `;
-      showToast('Ganador seleccionado: #' + w.numero, 'success');
+      showToast('Ganador seleccionado: #' + formatTicketNum(w.numero), 'success');
       await syncData(true);
     } catch (err) { showToast(err.message, 'error'); }
   });
