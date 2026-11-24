@@ -1,15 +1,15 @@
 /**
- * GESTOR DE RIFAS PRO - FRONTEND SPA + PWA (v4.3)
+ * GESTOR DE RIFAS PRO - FRONTEND SPA + PWA (v4.4)
  */
 
-const DEFAULT_GAS_ENDPOINT = 'https://script.google.com/macros/s/AKfycbxzG8Pre9SkPl5JD0RG4NocFzxj45cWZko1wLq63CYy8GiTfqSHFNLw7X9PPrkTCqt0Ow/exec';
+const DEFAULT_GAS_ENDPOINT = 'https://script.google.com/macros/s/AKfycbyv88F_YR8v1T5Fcjm9_DR-h-CvadL2G9v307yjwCo_lmB-ai7dNJZ8R84iGZQxgTkDNw/exec';
 const SNAPSHOT_KEY = 'rifas_last_snapshot_v1';
 
 const state = {
   endpoint: (localStorage.getItem('rifas_gas_url') || DEFAULT_GAS_ENDPOINT).trim(),
   token: localStorage.getItem('rifas_session_token') || '',
   user: null,
-  viewAsVendor: false,
+  activeRoleView: 'admin',
   config: null,
   tickets: [],
   users: [],
@@ -43,6 +43,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
   if (state.token) {
     const loadedCache = loadLocalSnapshot();
+    if (loadedCache) {
+      syncActiveRoleView(true);
+    }
     showAppShell();
     if (loadedCache) {
       applyVisualTheme();
@@ -54,8 +57,51 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 });
 
+function normalizeRoles(rawRole) {
+  const valid = ['admin', 'vendedor'];
+  const found = [];
+
+  const pushRole = (val) => {
+    const clean = String(val || '').trim().toLowerCase();
+    if (valid.includes(clean) && !found.includes(clean)) {
+      found.push(clean);
+    }
+  };
+
+  if (Array.isArray(rawRole)) {
+    rawRole.forEach(pushRole);
+  } else if (typeof rawRole === 'string' && rawRole.trim()) {
+    const trimmed = rawRole.trim();
+    if (trimmed.startsWith('[')) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (Array.isArray(parsed)) parsed.forEach(pushRole);
+      } catch (_) {
+        trimmed.split(',').forEach(pushRole);
+      }
+    } else {
+      trimmed.split(',').forEach(pushRole);
+    }
+  }
+
+  return found.length ? found : ['vendedor'];
+}
+
+function hasRole(userObj, roleName) {
+  if (!userObj) return false;
+  return normalizeRoles(userObj.roles || userObj.role).includes(roleName);
+}
+
+function syncActiveRoleView(resetToDefault = false) {
+  if (!state.user) return;
+  const roles = normalizeRoles(state.user.roles || state.user.role);
+  if (resetToDefault || !roles.includes(state.activeRoleView)) {
+    state.activeRoleView = roles.includes('admin') ? 'admin' : 'vendedor';
+  }
+}
+
 function isEffectiveAdmin() {
-  return Boolean(state.user && state.user.role === 'admin' && !state.viewAsVendor);
+  return Boolean(state.user && hasRole(state.user, 'admin') && state.activeRoleView === 'admin');
 }
 
 function applyTopbarRoleStyle(isAdminView) {
@@ -288,7 +334,7 @@ async function handleLoginSubmit(e) {
     const res = await apiCall('login', { username, password });
     state.token = res.token;
     state.user = res.user;
-    state.viewAsVendor = false;
+    syncActiveRoleView(true);
     localStorage.setItem('rifas_session_token', res.token);
 
     document.getElementById('loginForm').reset();
@@ -316,7 +362,7 @@ function forceLogout() {
   stopAutoSync();
   state.token = '';
   state.user = null;
-  state.viewAsVendor = false;
+  state.activeRoleView = 'admin';
   state.version = 0;
   state.seenWinnerKey = '';
   localStorage.removeItem('rifas_session_token');
@@ -354,6 +400,7 @@ async function syncData(forceFull = false) {
       state.version = res.version;
       state.config = res.config || {};
       state.user = res.user;
+      syncActiveRoleView(false);
 
       const mult = getTicketMultiplier(state.config);
       const total = Number(state.config.totalTickets || (res.tickets || []).length);
@@ -436,9 +483,12 @@ function switchToBoletosTab() {
 }
 
 function toggleAdminVendorRoleView() {
-  if (!state.user || state.user.role !== 'admin') return;
-  state.viewAsVendor = !state.viewAsVendor;
-  if (state.viewAsVendor) {
+  if (!state.user) return;
+  const canSwitch = hasRole(state.user, 'admin') && hasRole(state.user, 'vendedor');
+  if (!canSwitch) return;
+
+  state.activeRoleView = state.activeRoleView === 'admin' ? 'vendedor' : 'admin';
+  if (state.activeRoleView === 'vendedor') {
     switchToBoletosTab();
   }
   renderAll(false);
@@ -447,15 +497,16 @@ function toggleAdminVendorRoleView() {
 function renderAll(forceFormRefresh = false) {
   if (!state.user || !state.config) return;
 
-  const isRealAdmin = state.user.role === 'admin';
+  const isRealAdmin = hasRole(state.user, 'admin');
   const showAdminUI = isEffectiveAdmin();
+  const canSwitch = isRealAdmin && hasRole(state.user, 'vendedor');
 
   applyTopbarRoleStyle(showAdminUI);
 
   document.getElementById('topbarUser').textContent = state.user.username;
   const roleBtn = document.getElementById('topbarRole');
   roleBtn.textContent = showAdminUI ? 'Administrador' : 'Vendedor';
-  roleBtn.style.cursor = isRealAdmin ? 'pointer' : 'default';
+  roleBtn.style.cursor = canSwitch ? 'pointer' : 'default';
 
   document.querySelectorAll('.admin-only').forEach(el => {
     el.classList.toggle('hidden', !showAdminUI);
@@ -939,7 +990,7 @@ function renderVendorDistributionSummary() {
   const box = document.getElementById('vendorDistributionSummary');
   if (!box) return;
 
-  const activeVendors = (state.users || []).filter(u => u.role === 'vendedor' && u.active);
+  const activeVendors = (state.users || []).filter(u => hasRole(u, 'vendedor') && u.active);
   const vendorCount = activeVendors.length;
   const totalTickets = Number((state.config && state.config.totalTickets) || state.tickets.length || 0);
 
@@ -993,10 +1044,12 @@ function renderUsersAndAssignments() {
       ? '<span class="tag tag-vend">Activo</span>'
       : '<span class="tag tag-warn">Cerrado / Inactivo</span>';
 
+    const rolesText = normalizeRoles(u.roles || u.role).map(r => r.toUpperCase()).join(', ');
+
     return `
       <tr>
         <td><strong>${escapeHtml(u.username)}</strong></td>
-        <td>${u.role.toUpperCase()}</td>
+        <td>${escapeHtml(rolesText)}</td>
         <td>${statusLabel}</td>
         <td>${u.assignedTickets.length > 0 ? u.assignedTickets.map(formatTicketNum).join(', ') : 'Ninguno'}</td>
         <td>
@@ -1028,24 +1081,36 @@ window.deleteUserById = async function(userId, username) {
 window.editUser = function(userId) {
   const u = state.users.find(item => item.id === userId);
   if (!u) return;
+  const roles = normalizeRoles(u.roles || u.role);
   document.getElementById('userFormTitle').textContent = 'Editar Usuario: ' + u.username;
   document.getElementById('editUserId').value = u.id;
   document.getElementById('userUsername').value = u.username;
   document.getElementById('userPassword').value = '';
   document.getElementById('pwdHint').textContent = '(Dejar vacío para conservar actual)';
-  document.getElementById('userRole').value = u.role;
+  document.getElementById('chkRoleAdmin').checked = roles.includes('admin');
+  document.getElementById('chkRoleVendor').checked = roles.includes('vendedor');
   document.getElementById('userActive').value = String(u.active);
   document.getElementById('btnCancelEditUser').classList.remove('hidden');
 };
 
 async function handleSaveUserSubmit(e) {
   e.preventDefault();
+  const selectedRoles = [];
+  if (document.getElementById('chkRoleAdmin').checked) selectedRoles.push('admin');
+  if (document.getElementById('chkRoleVendor').checked) selectedRoles.push('vendedor');
+
+  if (!selectedRoles.length) {
+    showToast('Selecciona al menos un rol (Administrador o Vendedor).', 'error');
+    return;
+  }
+
   try {
     const res = await apiCall('saveUser', {
       id: document.getElementById('editUserId').value || undefined,
       username: document.getElementById('userUsername').value,
       password: document.getElementById('userPassword').value,
-      role: document.getElementById('userRole').value,
+      roles: selectedRoles,
+      role: selectedRoles[0],
       active: document.getElementById('userActive').value === 'true'
     });
     resetUserForm();
@@ -1059,6 +1124,8 @@ async function handleSaveUserSubmit(e) {
 function resetUserForm() {
   document.getElementById('userForm').reset();
   document.getElementById('editUserId').value = '';
+  document.getElementById('chkRoleAdmin').checked = false;
+  document.getElementById('chkRoleVendor').checked = true;
   document.getElementById('userFormTitle').textContent = 'Nuevo Usuario (Vendedor / Admin)';
   document.getElementById('pwdHint').textContent = '(Mínimo 6 caracteres)';
   document.getElementById('btnCancelEditUser').classList.add('hidden');
