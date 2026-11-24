@@ -70,6 +70,8 @@
 
     <main class="main-content">
       <section id="tabBoletos" class="tab-panel active">
+        <div id="vendorWinnerNotice" class="card mb-12 hidden"></div>
+
         <div id="raffleHeaderCard" class="raffle-header-card">
           <div class="raffle-top-banner">
             <div class="raffle-title-block">
@@ -131,6 +133,16 @@
             </div>
 
             <div id="displayImages" class="raffle-images"></div>
+
+            <div class="template-progress-box mt-16">
+              <div class="card-header-flex" style="margin-bottom: 6px;">
+                <strong>Avance de la rifa</strong>
+                <span id="templateProgressLabel">0%</span>
+              </div>
+              <div class="progress-bar-wrap">
+                <div id="templateProgressBar" class="progress-bar-fill" style="width: 0%"></div>
+              </div>
+            </div>
           </div>
 
           <div id="winnerBanner" class="winner-banner hidden"></div>
@@ -197,9 +209,12 @@
       <section id="tabStats" class="tab-panel hidden">
         <div class="kpi-grid" id="kpiGrid"></div>
         <div class="card mt-16">
-          <h3>Avance de la Rifa</h3>
+          <div class="card-header-flex">
+            <h3>Avance de la rifa</h3>
+            <span id="statsProgressLabel">0%</span>
+          </div>
           <div class="progress-bar-wrap">
-            <div id="raffleProgressBar" class="progress-bar-fill" style="width: 0%">0%</div>
+            <div id="raffleProgressBar" class="progress-bar-fill" style="width: 0%"></div>
           </div>
         </div>
         <div class="card mt-16">
@@ -345,6 +360,12 @@
               </div>
 
               <div class="form-group">
+                <label for="cfgMinWinnerSoldPercent">% mínimo de boletos vendidos para elegir ganador</label>
+                <input type="number" id="cfgMinWinnerSoldPercent" min="0" max="100" step="1" />
+                <small>0 = sin condición de venta mínima.</small>
+              </div>
+
+              <div class="form-group">
                 <label>Promociones / Paquetes</label>
                 <input type="text" id="cfgPromoText" />
               </div>
@@ -475,7 +496,7 @@
         <div class="grid-2-col">
           <div class="card">
             <h3>🏆 Selección del Ganador</h3>
-            <p>Selecciona aleatoriamente un número entre los participantes registrados.</p>
+            <p id="winnerConditionInfo" class="ticket-meta-info">Selecciona aleatoriamente un número entre los participantes registrados.</p>
             <div class="form-group">
               <label class="checkbox-label">
                 <input type="checkbox" id="winnerOnlyPaid" checked />
@@ -483,6 +504,15 @@
               </label>
             </div>
             <button type="button" id="btnPickWinner" class="btn btn-accent btn-lg btn-block">Elegir ganador</button>
+
+            <form id="manualWinnerForm" class="mt-16">
+              <div class="form-group">
+                <label for="manualWinnerNumber">Registrar ganador manualmente (número de boleto o extra)</label>
+                <input type="text" id="manualWinnerNumber" placeholder="Ej. 001, 045 o 000" />
+              </div>
+              <button type="submit" id="btnSetManualWinner" class="btn btn-primary btn-block">Guardar Ganador Manual</button>
+            </form>
+
             <div id="winnerResultBox" class="winner-box mt-16 hidden"></div>
           </div>
 
@@ -513,6 +543,20 @@
         </div>
       </section>
     </main>
+  </div>
+
+  <div id="vendorWinnerModal" class="modal hidden">
+    <div class="modal-backdrop" data-close="vendorWinnerModal"></div>
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h3>🏆 Ganador de la Rifa</h3>
+        <button type="button" class="modal-close" data-close="vendorWinnerModal">&times;</button>
+      </div>
+      <div id="vendorWinnerModalBody" class="ticket-meta-info"></div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-primary" data-close="vendorWinnerModal">Entendido</button>
+      </div>
+    </div>
   </div>
 
   <div id="ticketModal" class="modal hidden">
