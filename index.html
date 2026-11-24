@@ -95,16 +95,20 @@
               </div>
             </div>
 
-            <div class="prizes-zone">
+            <div id="prizesZone" class="prizes-zone">
               <div class="prizes-heading">🏆 PREMIOS</div>
-              <div class="prizes-two-col">
-                <div class="prize-line">
+              <div id="prizesPlacesList" class="prizes-two-col">
+                <div id="prizeRow1" class="prize-line">
                   <span class="prize-label">🥇 PRIMER LUGAR:</span>
-                  <span class="prize-val" id="displayFirstPrize">Premio a elegir.</span>
+                  <span class="prize-val" id="displayFirstPrize"></span>
                 </div>
-                <div class="prize-line">
+                <div id="prizeRow2" class="prize-line">
                   <span class="prize-label">🥈 SEGUNDO LUGAR:</span>
-                  <span class="prize-val-amount" id="displaySecondPrize">$5,000.</span>
+                  <span class="prize-val-amount" id="displaySecondPrize"></span>
+                </div>
+                <div id="prizeRow3" class="prize-line hidden">
+                  <span class="prize-label">🥉 TERCER LUGAR:</span>
+                  <span class="prize-val" id="displayThirdPrize"></span>
                 </div>
               </div>
             </div>
@@ -375,10 +379,23 @@
                 <label>Promociones / Paquetes</label>
                 <input type="text" id="cfgPromoText" />
               </div>
+
               <div class="form-group">
-                <label>Premios</label>
-                <textarea id="cfgPrizesText" rows="3"></textarea>
+                <label>Premios por lugar (si dejas un lugar vacío, no se mostrará)</label>
+                <div class="form-group" style="margin-top:6px;">
+                  <label for="cfgPrize1">🥇 1.er lugar</label>
+                  <textarea id="cfgPrize1" rows="2" placeholder="Ej. iPhone 17 o Premio a elegir"></textarea>
+                </div>
+                <div class="form-group">
+                  <label for="cfgPrize2">🥈 2.º lugar</label>
+                  <textarea id="cfgPrize2" rows="2" placeholder="Ej. $5,000 o iPad mini"></textarea>
+                </div>
+                <div class="form-group" style="margin-bottom:0;">
+                  <label for="cfgPrize3">🥉 3.er lugar</label>
+                  <textarea id="cfgPrize3" rows="2" placeholder="Opcional (dejar vacío para ocultar)"></textarea>
+                </div>
               </div>
+
               <div class="form-group">
                 <label>Motivo de la rifa</label>
                 <input type="text" id="cfgReasonText" />
