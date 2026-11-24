@@ -1,5 +1,5 @@
 /**
- * GESTOR DE RIFAS PRO - FRONTEND SPA + PWA (v4.1)
+ * GESTOR DE RIFAS PRO - FRONTEND SPA + PWA (v4.2)
  */
 
 const DEFAULT_GAS_ENDPOINT = 'https://script.google.com/macros/s/AKfycbxP7dnnwDuABbl5LPX-vjOh6J0-J0XH3S8n7xTJNI54cNUlwzxJFUOwhJoSJBcS89v_kQ/exec';
@@ -9,6 +9,7 @@ const state = {
   endpoint: (localStorage.getItem('rifas_gas_url') || DEFAULT_GAS_ENDPOINT).trim(),
   token: localStorage.getItem('rifas_session_token') || '',
   user: null,
+  viewAsVendor: false,
   config: null,
   tickets: [],
   users: [],
@@ -52,6 +53,10 @@ document.addEventListener('DOMContentLoaded', () => {
     showLoginView();
   }
 });
+
+function isEffectiveAdmin() {
+  return Boolean(state.user && state.user.role === 'admin' && !state.viewAsVendor);
+}
 
 function formatTicketNum(num) {
   const n = Number(num);
@@ -271,6 +276,7 @@ async function handleLoginSubmit(e) {
     const res = await apiCall('login', { username, password });
     state.token = res.token;
     state.user = res.user;
+    state.viewAsVendor = false;
     localStorage.setItem('rifas_session_token', res.token);
 
     document.getElementById('loginForm').reset();
@@ -298,6 +304,7 @@ function forceLogout() {
   stopAutoSync();
   state.token = '';
   state.user = null;
+  state.viewAsVendor = false;
   state.version = 0;
   state.seenWinnerKey = '';
   localStorage.removeItem('rifas_session_token');
@@ -407,22 +414,45 @@ function applyVisualTheme() {
   }
 }
 
+function switchToBoletosTab() {
+  document.querySelectorAll('.nav-tab').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.add('hidden'));
+  const boletosBtn = document.querySelector('.nav-tab[data-tab="tabBoletos"]');
+  if (boletosBtn) boletosBtn.classList.add('active');
+  const boletosPanel = document.getElementById('tabBoletos');
+  if (boletosPanel) boletosPanel.classList.remove('hidden');
+}
+
+function toggleAdminVendorRoleView() {
+  if (!state.user || state.user.role !== 'admin') return;
+  state.viewAsVendor = !state.viewAsVendor;
+  if (state.viewAsVendor) {
+    switchToBoletosTab();
+  }
+  renderAll(false);
+  showToast(state.viewAsVendor ? 'Vista cambiada a Vendedor' : 'Vista cambiada a Administrador', 'info');
+}
+
 function renderAll(forceFormRefresh = false) {
   if (!state.user || !state.config) return;
 
-  const isAdmin = state.user.role === 'admin';
+  const isRealAdmin = state.user.role === 'admin';
+  const showAdminUI = isEffectiveAdmin();
+
   document.getElementById('topbarUser').textContent = state.user.username;
-  document.getElementById('topbarRole').textContent = isAdmin ? 'Administrador' : 'Vendedor';
+  const roleBtn = document.getElementById('topbarRole');
+  roleBtn.textContent = showAdminUI ? 'Administrador' : 'Vendedor';
+  roleBtn.style.cursor = isRealAdmin ? 'pointer' : 'default';
 
   document.querySelectorAll('.admin-only').forEach(el => {
-    el.classList.toggle('hidden', !isAdmin);
+    el.classList.toggle('hidden', !showAdminUI);
   });
 
   renderRaffleHeader();
   renderTicketsGrid();
   renderVendorWinnerView();
 
-  if (isAdmin) {
+  if (isRealAdmin) {
     renderAdminTable();
     renderStats();
     renderUsersAndAssignments();
@@ -453,7 +483,7 @@ function renderVendorWinnerView() {
   const modal = document.getElementById('vendorWinnerModal');
   const winner = state.config && state.config.winnerResult;
 
-  if (!winner || !state.user || state.user.role === 'admin') {
+  if (!winner || !state.user || isEffectiveAdmin()) {
     if (notice) notice.classList.add('hidden');
     return;
   }
@@ -564,18 +594,34 @@ function renderRaffleHeader() {
   }
 }
 
+function getTicketsForCurrentView() {
+  if (!isEffectiveAdmin() && state.config && state.config.distributionMode === 'B') {
+    const userObj = (state.users || []).find(u => u.username === state.user.username);
+    const assignedSet = new Set(Array.isArray(userObj && userObj.assignedTickets) ? userObj.assignedTickets.map(Number) : []);
+    return state.tickets.filter(t => t.vendedorAsignado === state.user.username || assignedSet.has(Number(t.numero)));
+  }
+  return state.tickets;
+}
+
 function renderTicketsGrid() {
   const grid = document.getElementById('ticketsGrid');
   const q = state.searchQuery.toLowerCase();
   const mult = getTicketMultiplier(state.config);
+  const viewTickets = getTicketsForCurrentView();
 
-  const { total, disp, apar, vend } = getRaffleProgressMetrics();
-  document.getElementById('countAll').textContent = total;
+  let disp = 0, apar = 0, vend = 0;
+  viewTickets.forEach(t => {
+    if (t.estado === 'disponible') disp++;
+    else if (t.estado === 'apartado') apar++;
+    else if (t.estado === 'vendido') vend++;
+  });
+
+  document.getElementById('countAll').textContent = viewTickets.length;
   document.getElementById('countDisp').textContent = disp;
   document.getElementById('countApar').textContent = apar;
   document.getElementById('countVend').textContent = vend;
 
-  const filtered = state.tickets.filter(t => {
+  const filtered = viewTickets.filter(t => {
     if (state.currentFilter !== 'all' && t.estado !== state.currentFilter) return false;
     if (q) {
       const matchNum = String(t.numero).includes(q) || formatTicketNum(t.numero).includes(q);
@@ -1233,6 +1279,7 @@ window.restoreBackupById = async function(backupId) {
 function bindEvents() {
   document.getElementById('loginForm').addEventListener('submit', handleLoginSubmit);
   document.getElementById('btnLogout').addEventListener('click', handleLogoutClick);
+  document.getElementById('topbarRole').addEventListener('click', toggleAdminVendorRoleView);
   document.getElementById('btnManualSync').addEventListener('click', () => {
     state.configDirty = false;
     syncData(true);
