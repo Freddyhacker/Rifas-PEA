@@ -1,8 +1,8 @@
 /**
- * GESTOR DE RIFAS PRO - FRONTEND SPA + PWA (v4.4)
+ * GESTOR DE RIFAS PRO - FRONTEND SPA + PWA (v4.5)
  */
 
-const DEFAULT_GAS_ENDPOINT = 'https://script.google.com/macros/s/AKfycbyv88F_YR8v1T5Fcjm9_DR-h-CvadL2G9v307yjwCo_lmB-ai7dNJZ8R84iGZQxgTkDNw/exec';
+const DEFAULT_GAS_ENDPOINT = 'https://script.google.com/macros/s/AKfycbwaXsTB8PrO4T-F1YPb9hd9rInQpJO-Mk64VlZg4cgq93I-1ixCZtUj_w25pzt-nav46A/exec';
 const SNAPSHOT_KEY = 'rifas_last_snapshot_v1';
 
 const state = {
@@ -597,6 +597,45 @@ window.openVendorWinnerModal = function() {
   modal.classList.remove('hidden');
 };
 
+function getPrizePlaces(cfg = state.config) {
+  if (!cfg) return ['', '', ''];
+  const hasExplicitFields =
+    cfg.prize1 !== undefined ||
+    cfg.prize2 !== undefined ||
+    cfg.prize3 !== undefined ||
+    Array.isArray(cfg.prizesByPlace);
+
+  if (hasExplicitFields) {
+    const arr = Array.isArray(cfg.prizesByPlace) ? cfg.prizesByPlace : [];
+    return [
+      String(cfg.prize1 ?? arr[0] ?? '').trim(),
+      String(cfg.prize2 ?? arr[1] ?? '').trim(),
+      String(cfg.prize3 ?? arr[2] ?? '').trim()
+    ];
+  }
+
+  const raw = String(cfg.prizesText || '').trim();
+  if (!raw) return ['', '', ''];
+  const lines = raw.split(/\n|\|/).map(s => s.trim()).filter(Boolean);
+  return [
+    (lines[0] || '').replace(/^(🥇\s*)?(1\.?er\s*lugar\s*:?\s*|primer\s*lugar\s*:?\s*)/i, '').trim(),
+    (lines[1] || '').replace(/^(🥈\s*)?(2\.?º?\s*lugar\s*:?\s*|segundo\s*lugar\s*:?\s*)/i, '').trim(),
+    (lines[2] || '').replace(/^(🥉\s*)?(3\.?er\s*lugar\s*:?\s*|tercer\s*lugar\s*:?\s*)/i, '').trim()
+  ];
+}
+
+function renderMultilinePrizeText(targetEl, rawText) {
+  if (!targetEl) return;
+  targetEl.innerHTML = '';
+  const lines = String(rawText || '').split('\n');
+  lines.forEach((line, idx) => {
+    if (idx > 0) {
+      targetEl.appendChild(document.createElement('br'));
+    }
+    targetEl.appendChild(document.createTextNode(line));
+  });
+}
+
 function renderRaffleHeader() {
   const cfg = state.config || {};
   const mult = getTicketMultiplier(cfg);
@@ -614,18 +653,31 @@ function renderRaffleHeader() {
     promoTicketsEl.textContent = mult > 1 ? `${mult} números por boleto.` : '1 número por boleto.';
   }
 
-  const firstEl = document.getElementById('displayFirstPrize');
-  const secondEl = document.getElementById('displaySecondPrize');
-  const prizesRaw = String(cfg.prizesText || '').trim();
-  if (prizesRaw) {
-    const lines = prizesRaw.split(/\n|\|/).map(s => s.trim()).filter(Boolean);
-    if (lines.length >= 2) {
-      firstEl.textContent = lines[0].replace(/^(🥇\s*)?(PRIMER\s*LUGAR\s*:?\s*)/i, '') || 'Premio a elegir.';
-      secondEl.textContent = lines[1].replace(/^(🥈\s*)?(SEGUNDO\s*LUGAR\s*:?\s*)/i, '') || '$5,000.';
-    } else {
-      firstEl.textContent = lines[0] || 'Premio a elegir.';
-      secondEl.textContent = '$5,000.';
+  const [p1, p2, p3] = getPrizePlaces(cfg);
+  const prizesZone = document.getElementById('prizesZone');
+  const row1 = document.getElementById('prizeRow1');
+  const row2 = document.getElementById('prizeRow2');
+  const row3 = document.getElementById('prizeRow3');
+
+  const togglePrizeRow = (rowEl, textEl, val) => {
+    const clean = String(val || '').trim();
+    if (!rowEl || !textEl) return false;
+    if (!clean) {
+      rowEl.classList.add('hidden');
+      textEl.textContent = '';
+      return false;
     }
+    rowEl.classList.remove('hidden');
+    renderMultilinePrizeText(textEl, clean);
+    return true;
+  };
+
+  const v1 = togglePrizeRow(row1, document.getElementById('displayFirstPrize'), p1);
+  const v2 = togglePrizeRow(row2, document.getElementById('displaySecondPrize'), p2);
+  const v3 = togglePrizeRow(row3, document.getElementById('displayThirdPrize'), p3);
+
+  if (prizesZone) {
+    prizesZone.classList.toggle('hidden', !(v1 || v2 || v3));
   }
 
   document.getElementById('displayReason').textContent = cfg.reasonText || 'Equipo Evangelismo.';
@@ -1149,6 +1201,8 @@ function updateExtraHint(val) {
 function populateConfigForm() {
   const c = state.config;
   const mult = getTicketMultiplier(c);
+  const [p1, p2, p3] = getPrizePlaces(c);
+
   document.getElementById('cfgTitle').value = c.title || '';
   document.getElementById('cfgSubtitle').value = c.subtitle || '';
   document.getElementById('cfgTotalTickets').value = c.totalTickets ?? 100;
@@ -1157,7 +1211,9 @@ function populateConfigForm() {
   updateExtraHint(mult);
   document.getElementById('cfgMinWinnerSoldPercent').value = c.minWinnerSoldPercent ?? 0;
   document.getElementById('cfgPromoText').value = c.promoText || '';
-  document.getElementById('cfgPrizesText').value = c.prizesText || '';
+  document.getElementById('cfgPrize1').value = p1;
+  document.getElementById('cfgPrize2').value = p2;
+  document.getElementById('cfgPrize3').value = p3;
   document.getElementById('cfgReasonText').value = c.reasonText || '';
   document.getElementById('cfgEventDate').value = c.eventDate || '';
   document.getElementById('cfgReservationHours').value = c.reservationHours ?? 24;
@@ -1246,6 +1302,11 @@ async function handleSaveConfigSubmit(e, regenerateExtraMap = false) {
     const multVal = Math.max(1, Math.floor(readFieldClean('cfgNumbersPerTicket', prevMult, true)));
     const minPctVal = Math.max(0, Math.min(100, readFieldClean('cfgMinWinnerSoldPercent', Number(cur.minWinnerSoldPercent) || 0, true)));
 
+    const prize1Val = readFieldClean('cfgPrize1', '', false).trim();
+    const prize2Val = readFieldClean('cfgPrize2', '', false).trim();
+    const prize3Val = readFieldClean('cfgPrize3', '', false).trim();
+    const prizesCombined = [prize1Val, prize2Val, prize3Val].filter(Boolean).join('\n');
+
     const localMap = multVal > 1
       ? ((regenerateExtraMap || Number(cur.totalTickets) !== totalVal || prevMult !== multVal || !isExtraMapValid(cur.extraMap, totalVal, multVal))
         ? buildExtraMap(totalVal, multVal)
@@ -1263,7 +1324,11 @@ async function handleSaveConfigSubmit(e, regenerateExtraMap = false) {
       regenerateExtraMap: regenerateExtraMap,
       minWinnerSoldPercent: minPctVal,
       promoText: readFieldClean('cfgPromoText', cur.promoText || '', false),
-      prizesText: readFieldClean('cfgPrizesText', cur.prizesText || '', false),
+      prize1: prize1Val,
+      prize2: prize2Val,
+      prize3: prize3Val,
+      prizesByPlace: [prize1Val, prize2Val, prize3Val],
+      prizesText: prizesCombined,
       reasonText: readFieldClean('cfgReasonText', cur.reasonText || '', false),
       eventDate: readFieldClean('cfgEventDate', cur.eventDate || '', false),
       reservationHours: readFieldClean('cfgReservationHours', Number(cur.reservationHours) || 24, true),
