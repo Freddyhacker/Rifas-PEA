@@ -254,11 +254,17 @@
               </div>
               <div class="form-row">
                 <div class="form-group">
-                  <label>Rol</label>
-                  <select id="userRole">
-                    <option value="vendedor">Vendedor</option>
-                    <option value="admin">Administrador</option>
-                  </select>
+                  <label>Roles</label>
+                  <div class="btn-row" style="margin-top:6px;">
+                    <label class="checkbox-label">
+                      <input type="checkbox" id="chkRoleAdmin" value="admin" />
+                      Administrador
+                    </label>
+                    <label class="checkbox-label">
+                      <input type="checkbox" id="chkRoleVendor" value="vendedor" checked />
+                      Vendedor
+                    </label>
+                  </div>
                 </div>
                 <div class="form-group">
                   <label>Estado de cuenta</label>
