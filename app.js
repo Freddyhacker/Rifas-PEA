@@ -1,5 +1,5 @@
 /**
- * GESTOR DE RIFAS PRO - FRONTEND SPA + PWA (v4.0)
+ * GESTOR DE RIFAS PRO - FRONTEND SPA + PWA (v4.1)
  */
 
 const DEFAULT_GAS_ENDPOINT = 'https://script.google.com/macros/s/AKfycbxP7dnnwDuABbl5LPX-vjOh6J0-J0XH3S8n7xTJNI54cNUlwzxJFUOwhJoSJBcS89v_kQ/exec';
@@ -20,7 +20,8 @@ const state = {
   syncTimer: null,
   deferredInstallPrompt: null,
   tempConfigImages: [],
-  configDirty: false
+  configDirty: false,
+  seenWinnerKey: ''
 };
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -64,6 +65,31 @@ function getTicketMultiplier(cfg = state.config) {
   const n = Number(cfg.numbersPerTicket);
   if (!Number.isNaN(n) && n >= 1) return Math.floor(n);
   return cfg.doubleChance ? 2 : 1;
+}
+
+function getWinnerNumbersFormatted(winner) {
+  if (!winner) return [];
+  if (Array.isArray(winner.numerosParticipantes) && winner.numerosParticipantes.length > 0) {
+    return winner.numerosParticipantes.map(n => `#${formatTicketNum(n)}`);
+  }
+  const ticket = state.tickets.find(
+    t => Number(t.numero) === Number(winner.boletoPrincipal || winner.numero)
+  );
+  if (ticket) {
+    const extras = Array.isArray(ticket.extraNumbers) ? ticket.extraNumbers : [];
+    return [ticket.numero, ...extras].map(n => `#${formatTicketNum(n)}`);
+  }
+  return winner.numero !== undefined ? [`#${formatTicketNum(winner.numero)}`] : [];
+}
+
+function getRaffleProgressMetrics() {
+  const total = state.tickets.length;
+  const disp = state.tickets.filter(t => t.estado === 'disponible').length;
+  const apar = state.tickets.filter(t => t.estado === 'apartado').length;
+  const vend = state.tickets.filter(t => t.estado === 'vendido').length;
+  const pctSold = total > 0 ? (vend / total) * 100 : 0;
+  const pctOccupied = total > 0 ? Math.round(((vend + apar) / total) * 100) : 0;
+  return { total, disp, apar, vend, pctSold, pctOccupied };
 }
 
 function buildExtraMap(totalTickets, multiplier) {
@@ -273,6 +299,7 @@ function forceLogout() {
   state.token = '';
   state.user = null;
   state.version = 0;
+  state.seenWinnerKey = '';
   localStorage.removeItem('rifas_session_token');
   localStorage.removeItem(SNAPSHOT_KEY);
   showLoginView();
@@ -393,6 +420,7 @@ function renderAll(forceFormRefresh = false) {
 
   renderRaffleHeader();
   renderTicketsGrid();
+  renderVendorWinnerView();
 
   if (isAdmin) {
     renderAdminTable();
@@ -403,8 +431,77 @@ function renderAll(forceFormRefresh = false) {
     }
     renderHistory();
     renderBackups();
+    renderWinnerConditionInfo();
   }
 }
+
+function renderWinnerConditionInfo() {
+  const el = document.getElementById('winnerConditionInfo');
+  if (!el || !state.config) return;
+  const reqPct = Number(state.config.minWinnerSoldPercent || 0);
+  const { pctSold } = getRaffleProgressMetrics();
+  if (reqPct > 0) {
+    el.textContent = `Condición de venta mínima: ${reqPct}% de boletos vendidos (actual: ${pctSold.toFixed(1)}%).`;
+  } else {
+    el.textContent = 'Sin condición de porcentaje mínimo de venta.';
+  }
+}
+
+function renderVendorWinnerView() {
+  const notice = document.getElementById('vendorWinnerNotice');
+  const modalBody = document.getElementById('vendorWinnerModalBody');
+  const modal = document.getElementById('vendorWinnerModal');
+  const winner = state.config && state.config.winnerResult;
+
+  if (!winner || !state.user || state.user.role === 'admin') {
+    if (notice) notice.classList.add('hidden');
+    return;
+  }
+
+  const numsList = getWinnerNumbersFormatted(winner);
+  const numsText = numsList.length ? numsList.join(', ') : `#${formatTicketNum(winner.numero)}`;
+
+  if (notice) {
+    notice.classList.remove('hidden');
+    notice.innerHTML = `
+      <div class="card-header-flex">
+        <div>
+          <strong>🏆 Ganador: ${escapeHtml(winner.participante || 'Participante')}</strong>
+          <div>Números con los que participaba: <strong>${escapeHtml(numsText)}</strong></div>
+        </div>
+        <button type="button" class="btn btn-sm btn-primary" onclick="openVendorWinnerModal()">Ver detalle</button>
+      </div>
+    `;
+  }
+
+  const key = `${winner.numero}_${winner.selectedAt || winner.participante}`;
+  if (state.seenWinnerKey !== key) {
+    state.seenWinnerKey = key;
+    if (modalBody && modal) {
+      modalBody.innerHTML = `
+        <p><strong>Ganador:</strong> ${escapeHtml(winner.participante || '-')}</p>
+        ${winner.telefono ? `<p><strong>Teléfono:</strong> ${escapeHtml(winner.telefono)}</p>` : ''}
+        <p><strong>Números con los que participaba:</strong> <strong>${escapeHtml(numsText)}</strong></p>
+      `;
+      modal.classList.remove('hidden');
+    }
+  }
+}
+
+window.openVendorWinnerModal = function() {
+  const winner = state.config && state.config.winnerResult;
+  const modalBody = document.getElementById('vendorWinnerModalBody');
+  const modal = document.getElementById('vendorWinnerModal');
+  if (!winner || !modalBody || !modal) return;
+  const numsList = getWinnerNumbersFormatted(winner);
+  const numsText = numsList.length ? numsList.join(', ') : `#${formatTicketNum(winner.numero)}`;
+  modalBody.innerHTML = `
+    <p><strong>Ganador:</strong> ${escapeHtml(winner.participante || '-')}</p>
+    ${winner.telefono ? `<p><strong>Teléfono:</strong> ${escapeHtml(winner.telefono)}</p>` : ''}
+    <p><strong>Números con los que participaba:</strong> <strong>${escapeHtml(numsText)}</strong></p>
+  `;
+  modal.classList.remove('hidden');
+};
 
 function renderRaffleHeader() {
   const cfg = state.config || {};
@@ -451,11 +548,17 @@ function renderRaffleHeader() {
     imgBox.appendChild(img);
   });
 
+  const { pctOccupied } = getRaffleProgressMetrics();
+  const tplBar = document.getElementById('templateProgressBar');
+  const tplLabel = document.getElementById('templateProgressLabel');
+  if (tplBar) tplBar.style.width = pctOccupied + '%';
+  if (tplLabel) tplLabel.textContent = `${pctOccupied}%`;
+
   const winnerBanner = document.getElementById('winnerBanner');
   if (cfg.winnerResult) {
     winnerBanner.classList.remove('hidden');
-    const bPrincipal = cfg.winnerResult.boletoPrincipal ? ` (Boleto #${formatTicketNum(cfg.winnerResult.boletoPrincipal)})` : '';
-    winnerBanner.textContent = `🏆 NÚMERO GANADOR SELECCIONADO: #${formatTicketNum(cfg.winnerResult.numero)}${bPrincipal} — ${cfg.winnerResult.participante} (${formatDate(cfg.winnerResult.selectedAt)})`;
+    const numsText = getWinnerNumbersFormatted(cfg.winnerResult).join(', ');
+    winnerBanner.textContent = `🏆 GANADOR: ${cfg.winnerResult.participante} — Número #${formatTicketNum(cfg.winnerResult.numero)}${numsText ? ` (Números: ${numsText})` : ''}`;
   } else {
     winnerBanner.classList.add('hidden');
   }
@@ -466,14 +569,8 @@ function renderTicketsGrid() {
   const q = state.searchQuery.toLowerCase();
   const mult = getTicketMultiplier(state.config);
 
-  let disp = 0, apar = 0, vend = 0;
-  state.tickets.forEach(t => {
-    if (t.estado === 'disponible') disp++;
-    else if (t.estado === 'apartado') apar++;
-    else if (t.estado === 'vendido') vend++;
-  });
-
-  document.getElementById('countAll').textContent = state.tickets.length;
+  const { total, disp, apar, vend } = getRaffleProgressMetrics();
+  document.getElementById('countAll').textContent = total;
   document.getElementById('countDisp').textContent = disp;
   document.getElementById('countApar').textContent = apar;
   document.getElementById('countVend').textContent = vend;
@@ -713,18 +810,14 @@ function exportToExcel() {
 }
 
 function renderStats() {
-  const total = state.tickets.length;
   const price = Number(state.config.ticketPrice || 0);
   const mult = getTicketMultiplier(state.config);
-  const disp = state.tickets.filter(t => t.estado === 'disponible').length;
-  const apar = state.tickets.filter(t => t.estado === 'apartado').length;
-  const vend = state.tickets.filter(t => t.estado === 'vendido').length;
+  const { total, disp, apar, vend, pctOccupied } = getRaffleProgressMetrics();
 
   const recaudado = vend * price;
   const pendienteDinero = apar * price;
   const proyeccionTotal = total * price;
   const pctVendidos = total > 0 ? Math.round((vend / total) * 100) : 0;
-  const pctOcupados = total > 0 ? Math.round(((vend + apar) / total) * 100) : 0;
 
   document.getElementById('kpiGrid').innerHTML = `
     <div class="kpi-card"><span>Total de Boletos</span><strong>${total}${mult > 1 ? ` (${total * mult} núms)` : ''}</strong></div>
@@ -734,12 +827,13 @@ function renderStats() {
     <div class="kpi-card"><span>Dinero Recaudado</span><strong style="color:#059669">$${recaudado.toLocaleString()}</strong></div>
     <div class="kpi-card"><span>Pendiente por Cobrar</span><strong style="color:var(--warning)">$${pendienteDinero.toLocaleString()}</strong></div>
     <div class="kpi-card"><span>Proyección Máxima</span><strong>$${proyeccionTotal.toLocaleString()}</strong></div>
-    <div class="kpi-card"><span>Avance Total</span><strong>${pctOcupados}%</strong></div>
+    <div class="kpi-card"><span>Avance Total</span><strong>${pctOccupied}%</strong></div>
   `;
 
   const bar = document.getElementById('raffleProgressBar');
-  bar.style.width = pctOcupados + '%';
-  bar.textContent = `${pctOcupados}% ocupado (${vend} pagados, ${apar} apartados, ${disp} libres de ${total})`;
+  const statsLabel = document.getElementById('statsProgressLabel');
+  if (bar) bar.style.width = pctOccupied + '%';
+  if (statsLabel) statsLabel.textContent = `${pctOccupied}% (${vend} pagados, ${apar} apartados, ${disp} libres de ${total})`;
 
   const vendorMap = {};
   state.users.forEach(u => {
@@ -935,6 +1029,7 @@ function populateConfigForm() {
   document.getElementById('cfgTicketPrice').value = c.ticketPrice ?? 50;
   document.getElementById('cfgNumbersPerTicket').value = mult;
   updateExtraHint(mult);
+  document.getElementById('cfgMinWinnerSoldPercent').value = c.minWinnerSoldPercent ?? 0;
   document.getElementById('cfgPromoText').value = c.promoText || '';
   document.getElementById('cfgPrizesText').value = c.prizesText || '';
   document.getElementById('cfgReasonText').value = c.reasonText || '';
@@ -1023,6 +1118,7 @@ async function handleSaveConfigSubmit(e, regenerateExtraMap = false) {
     const totalVal = readFieldClean('cfgTotalTickets', Number(cur.totalTickets) || 100, true);
     const priceVal = readFieldClean('cfgTicketPrice', Number(cur.ticketPrice) || 50, true);
     const multVal = Math.max(1, Math.floor(readFieldClean('cfgNumbersPerTicket', prevMult, true)));
+    const minPctVal = Math.max(0, Math.min(100, readFieldClean('cfgMinWinnerSoldPercent', Number(cur.minWinnerSoldPercent) || 0, true)));
 
     const localMap = multVal > 1
       ? ((regenerateExtraMap || Number(cur.totalTickets) !== totalVal || prevMult !== multVal || !isExtraMapValid(cur.extraMap, totalVal, multVal))
@@ -1039,6 +1135,7 @@ async function handleSaveConfigSubmit(e, regenerateExtraMap = false) {
       doubleChance: multVal > 1,
       extraMap: localMap,
       regenerateExtraMap: regenerateExtraMap,
+      minWinnerSoldPercent: minPctVal,
       promoText: readFieldClean('cfgPromoText', cur.promoText || '', false),
       prizesText: readFieldClean('cfgPrizesText', cur.prizesText || '', false),
       reasonText: readFieldClean('cfgReasonText', cur.reasonText || '', false),
@@ -1072,6 +1169,21 @@ async function handleSaveConfigSubmit(e, regenerateExtraMap = false) {
     btn.disabled = false;
     btn.textContent = '💾 Guardar Toda la Configuración';
   }
+}
+
+function renderWinnerBoxResult(w) {
+  const box = document.getElementById('winnerResultBox');
+  if (!box || !w) return;
+  const numsText = getWinnerNumbersFormatted(w).join(', ');
+  box.classList.remove('hidden');
+  box.innerHTML = `
+    <h2>🎉 Número Ganador: #${formatTicketNum(w.numero)}</h2>
+    ${numsText ? `<p><strong>Números participantes:</strong> ${escapeHtml(numsText)}</p>` : ''}
+    <p><strong>Participante:</strong> ${escapeHtml(w.participante)}</p>
+    <p><strong>Teléfono:</strong> ${escapeHtml(w.telefono)}</p>
+    <p><strong>Vendedor:</strong> ${escapeHtml(w.vendedor)}</p>
+    <small>${formatDate(w.selectedAt)}</small>
+  `;
 }
 
 function renderHistory() {
@@ -1219,18 +1331,28 @@ function bindEvents() {
     if (!confirm('¿Confirmas seleccionar un número ganador aleatorio ahora?')) return;
     try {
       const res = await apiCall('pickWinner', { onlyPaid });
-      const w = res.winner;
-      const box = document.getElementById('winnerResultBox');
-      box.classList.remove('hidden');
-      box.innerHTML = `
-        <h2>🎉 Número Ganador: #${formatTicketNum(w.numero)}</h2>
-        ${w.boletoPrincipal ? `<p><strong>Boleto registrado:</strong> #${formatTicketNum(w.boletoPrincipal)}</p>` : ''}
-        <p><strong>Participante:</strong> ${escapeHtml(w.participante)}</p>
-        <p><strong>Teléfono:</strong> ${escapeHtml(w.telefono)}</p>
-        <p><strong>Vendedor:</strong> ${escapeHtml(w.vendedor)}</p>
-        <small>${formatDate(w.selectedAt)}</small>
-      `;
-      showToast('Ganador seleccionado: #' + formatTicketNum(w.numero), 'success');
+      renderWinnerBoxResult(res.winner);
+      showToast('Ganador seleccionado: #' + formatTicketNum(res.winner.numero), 'success');
+      await syncData(true);
+    } catch (err) { showToast(err.message, 'error'); }
+  });
+
+  document.getElementById('manualWinnerForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const rawVal = document.getElementById('manualWinnerNumber').value.trim();
+    const onlyPaid = document.getElementById('winnerOnlyPaid').checked;
+    if (!rawVal) {
+      showToast('Ingresa el número ganador.', 'error');
+      return;
+    }
+    try {
+      const res = await apiCall('setManualWinner', {
+        numero: rawVal,
+        onlyPaid: onlyPaid
+      });
+      document.getElementById('manualWinnerNumber').value = '';
+      renderWinnerBoxResult(res.winner);
+      showToast('Ganador manual registrado: #' + formatTicketNum(res.winner.numero), 'success');
       await syncData(true);
     } catch (err) { showToast(err.message, 'error'); }
   });
