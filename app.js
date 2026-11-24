@@ -1,5 +1,5 @@
 /**
- * GESTOR DE RIFAS PRO - FRONTEND SPA + PWA (v4.2)
+ * GESTOR DE RIFAS PRO - FRONTEND SPA + PWA (v4.3)
  */
 
 const DEFAULT_GAS_ENDPOINT = 'https://script.google.com/macros/s/AKfycbxzG8Pre9SkPl5JD0RG4NocFzxj45cWZko1wLq63CYy8GiTfqSHFNLw7X9PPrkTCqt0Ow/exec';
@@ -56,6 +56,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
 function isEffectiveAdmin() {
   return Boolean(state.user && state.user.role === 'admin' && !state.viewAsVendor);
+}
+
+function applyTopbarRoleStyle(isAdminView) {
+  const topbar = document.querySelector('.topbar');
+  if (!topbar) return;
+  if (isAdminView) {
+    topbar.style.background = 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)';
+    topbar.style.borderBottomColor = '#f59e0b';
+  } else {
+    topbar.style.background = '#ffffff';
+    topbar.style.borderBottomColor = '#e2e8f0';
+  }
 }
 
 function formatTicketNum(num) {
@@ -430,7 +442,6 @@ function toggleAdminVendorRoleView() {
     switchToBoletosTab();
   }
   renderAll(false);
-  showToast(state.viewAsVendor ? 'Vista cambiada a Vendedor' : 'Vista cambiada a Administrador', 'info');
 }
 
 function renderAll(forceFormRefresh = false) {
@@ -438,6 +449,8 @@ function renderAll(forceFormRefresh = false) {
 
   const isRealAdmin = state.user.role === 'admin';
   const showAdminUI = isEffectiveAdmin();
+
+  applyTopbarRoleStyle(showAdminUI);
 
   document.getElementById('topbarUser').textContent = state.user.username;
   const roleBtn = document.getElementById('topbarRole');
